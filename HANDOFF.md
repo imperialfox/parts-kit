@@ -50,7 +50,7 @@
 
 **What changed**
 - `imperialfox/parts-kit` **1.0.0**: `parts-kit.css` (the defaults block, then 43 parts' rules) and `parts-kit.js` (`window.Parts`: settings, the spring core, the press, every part's behaviour and the overlay calls), `README.md`, `CHANGELOG.md`, `LICENSE.txt`, `SHA256SUMS.txt`, `samples/vocal-sessions.settings.js` (D01–D17), `demo/` (the Parts gallery, with a pinned, unmodified prototype kit 1.1.0 in `demo/vendor/` for its frame and controls), `tools/` (`check.py`, `values.py`, `bundle.py`, `plain.html`), `docs/blueprint.md`.
-- Built in the seven stages, one commit each, then the release commit and tag `v1.0.0`.
+- Built in the seven stages, one commit each, then the release commit (`c4b8ba6` on `main`). This session couldn't create git tags or GitHub releases (the connection refuses both), so the `v1.0.0` tag and release page are left for Ivan (below); the version is already in both files, the README and the changelog.
 - The Parts gallery (artifact `174c215e-…`) republished as version `1793752188-a565`, on the kit. Its notes store had no notes, so nothing was left behind; its page id (`parts-gallery-v1`) is unchanged, so future notes keep their place.
 
 **How it was checked** (`python tools/check.py`, all passing)
@@ -73,6 +73,7 @@
 - The move of Vocal Sessions onto the kit: its own Blueprint and Render, replacing Q34 (Blueprint › After this, step 4).
 - Smart file drop's wireframe can start, pulling its sheets from the kit.
 - Decision 6 (the prototype kit and `SHARED.md`) is still on Ivan's to-do list.
+- **One thing for Ivan:** on GitHub, open the repo › Releases › *Draft a new release*, type the tag `v1.0.0` (target `main`), title "Parts kit 1.0.0", paste the 1.0.0 part of `CHANGELOG.md`, attach `parts-kit.css`, `parts-kit.js` and `SHA256SUMS.txt`, and publish.
 
 **For Ivan, on your phone** (the Parts gallery)
 1. Do the sheets, menus and switches feel like the old gallery's, or better?

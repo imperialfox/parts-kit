@@ -327,6 +327,80 @@ def bars_and_buttons(page):
     ok(page.evaluate("document.querySelector('#p18 .pk-chip').classList.contains('on')"), "18: a chip picks")
 
 
+@behaviour
+def controls_and_inputs(page):
+    page.evaluate("Parts.motion.setSpeed(0)")
+    scroll_to(page, "#p21")
+    on = lambda i: page.evaluate(f"document.querySelectorAll('#p21 .pk-switch')[{i}].classList.contains('on')")
+    page.click("#p21 .pk-switch >> nth=1")
+    ok(on(1), "21: tapping a switch turns it on")
+    page.click("#p21 .pk-switch-row >> nth=1", position={"x": 60, "y": 20})
+    ok(not on(1), "21: tapping its row turns it off")
+    b = page.locator("#p21 .pk-switch").nth(1).bounding_box()
+    # a slow drag past halfway
+    drag(page, b["x"] + 14, b["y"] + 14, b["x"] + 50, b["y"] + 14, steps=20)
+    ok(on(1), "21: dragging the knob past halfway turns it on")
+    # a short fast flick back (not past halfway) still decides
+    page.mouse.move(b["x"] + 48, b["y"] + 14); page.mouse.down(); page.mouse.move(b["x"] + 44, b["y"] + 14); page.mouse.move(b["x"] + 38, b["y"] + 14); page.mouse.up()
+    ok(not on(1), "21: a quick flick decides the switch")
+    # 22 slider
+    scroll_to(page, "#p22")
+    b = page.locator("#vol").bounding_box()
+    page.mouse.move(b["x"] + b["width"] * 0.2, b["y"] + 17); page.mouse.down()
+    held = page.evaluate("getComputedStyle(document.querySelector('#vol .pk-slider-thumb')).scale")
+    page.mouse.move(b["x"] + b["width"] * 0.75, b["y"] + 17); page.mouse.up()
+    v = float(page.evaluate("document.querySelector('#vol').dataset.value"))
+    ok(abs(v - 75) < 2 and page.inner_text("#slv") == str(round(v)), f"22: the slider follows the finger ({v})")
+    ok(held == "1.35", f"22: the knob grows ×1.35 while held ({held})")
+    # 23 segmented: tap, drag, and the squish setting
+    scroll_to(page, "#p23")
+    seg = "#segDWM"
+    page.click(f"{seg} button >> nth=2")
+    ok(page.evaluate(f"document.querySelectorAll('{seg} button')[2].classList.contains('on')"), "23: tapping a segment picks it")
+    x0, y0 = center(page, f"{seg} button >> nth=2"); x1, _ = center(page, f"{seg} button >> nth=0")
+    page.mouse.move(x0, y0); page.mouse.down()
+    live = page.evaluate(f"document.querySelector('{seg} .pk-seg-ind').classList.contains('pk-live')")
+    for i in range(1, 11):
+        page.mouse.move(x0 + (x1 - x0) * i / 10, y0); page.wait_for_timeout(8)
+    page.mouse.up()
+    ok(live and page.evaluate(f"document.querySelectorAll('{seg} button')[0].classList.contains('on')"), "23: the knob swells to glass and can be dragged")
+    page.evaluate("Kit.set('Segmented (D04)', 1)"); page.evaluate("Parts.motion.setSpeed(1)")
+    page.mouse.move(x0, y0); page.mouse.down()
+    live2 = page.evaluate(f"document.querySelector('{seg} .pk-seg-ind').classList.contains('pk-live')")
+    page.mouse.up()
+    sq = page.evaluate(f"document.querySelector('{seg} .pk-seg-ind').classList.contains('pk-squish')")
+    page.evaluate("Kit.set('Segmented (D04)', 0)"); page.evaluate("Parts.motion.setSpeed(0)")
+    ok(not live2 and sq, f"D04: with segmented.style 'squish' a tap squishes and nothing swells ({live2}, {sq})")
+    # 24 stepper, 25 progress
+    scroll_to(page, "#p24")
+    page.click("#sets [data-step='1']"); page.click("#sets [data-step='1']"); page.click("#sets [data-step='-1']")
+    ok(page.inner_text("#p24 [data-pk-value-of]") == "4", "24: the stepper counts")
+    scroll_to(page, "#p25"); page.click("#runBtn")
+    ok(page.evaluate("getComputedStyle(document.querySelector('#pb i')).width") != "0px", "25: the progress bar shows its value")
+    # 26 search stretch: at most about 7 pt lengthwise and 2 pt across
+    scroll_to(page, "#p26")
+    b = page.locator("#p26 .pk-search").bounding_box()
+    page.mouse.move(b["x"] + 30, b["y"] + 22); page.mouse.down()
+    for i in range(1, 16):
+        page.mouse.move(b["x"] + 30 + i * 20, b["y"] + 22 + i * 4); page.wait_for_timeout(5)
+    r = page.evaluate("(() => { const f = document.querySelector('#p26 .pk-search'), r = f.getBoundingClientRect(); return { w: r.width - f.offsetWidth, h: r.height - f.offsetHeight }; })()")
+    page.mouse.up()
+    page.wait_for_timeout(30)
+    back = page.evaluate("document.querySelector('#p26 .pk-search').style.scale")
+    ok(4 < r["w"] <= 7.05 and 0.5 < r["h"] <= 2.05 and back == "", f"26: the search field stretches about 7 pt and 2 pt, then springs back ({r})")
+    # 27 clear button, 29 grows
+    scroll_to(page, "#p27")
+    page.fill("#p27 input", "Hello")
+    ok(page.evaluate("document.querySelector('#p27 .pk-field').classList.contains('pk-has')"), "27: the clear button shows once there's text")
+    page.click("#p27 .pk-field-clear")
+    ok(page.input_value("#p27 input") == "", "27: the clear button clears it")
+    scroll_to(page, "#p29")
+    h0 = page.evaluate("document.querySelector('#p29 textarea').offsetHeight")
+    page.fill("#p29 textarea", "line\n" * 8)
+    h1 = page.evaluate("document.querySelector('#p29 textarea').offsetHeight")
+    ok(h1 > h0, f"29: the text area grows as you type ({h0} → {h1})")
+
+
 def main():
     shots = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else KIT / "shots").resolve()
     shots.mkdir(parents=True, exist_ok=True)

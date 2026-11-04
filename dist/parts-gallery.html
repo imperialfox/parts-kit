@@ -244,6 +244,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   /* press */
   --press: 0.93; /* solid buttons */
   --press-row: 0.98; /* rows, when row.press is 'shrink' */
+  --pk-knob-grow: 1.35; /* a switch or slider knob while held */
 
   /* easings (fixed curves; the springs are --ease-gentle … published by the motion core) */
   --ease-pop: cubic-bezier(0.3, 1.7, 0.45, 1); /* the solid press settle */
@@ -411,7 +412,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
 /* ===================================================================================================================
    FOUNDATIONS
    =================================================================================================================== */
-:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button) {
+:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button, .pk-field-clear) {
   font: inherit;
   color: inherit;
   border: 0;
@@ -1098,6 +1099,320 @@ body > .pk-layer {
   color: var(--on-accent);
   display: inline-flex;
   align-items: center;
+}
+
+/* ===================================================================================================================
+   CONTROLS AND INPUTS
+   =================================================================================================================== */
+
+/* (21) switch: 64 × 28. Pressed, the knob turns to glass and swells; it travels over 380 ms. Drag it: a flick faster
+   than 200 px/s decides, otherwise whichever side it's past halfway. */
+.pk-switch {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--pk-switch-off);
+  flex: none;
+  touch-action: none;
+  cursor: pointer;
+  transition: background-color calc(var(--dur-switch) * var(--pk-speed)) var(--ease-in-out);
+}
+.pk-switch.on {
+  background: var(--good);
+}
+.pk-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 38px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--pk-knob);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  translate: var(--pk-sx, 0px) 0;
+  scale: var(--pk-sb, 1);
+  transition:
+    translate calc(var(--dur-switch) * var(--pk-speed)) var(--ease-in-out),
+    scale calc(var(--dur-quick) * var(--pk-speed)) var(--ease-lift),
+    background-color calc(var(--dur-quick) * var(--pk-speed)) var(--ease-out),
+    box-shadow calc(var(--dur-quick) * var(--pk-speed)) var(--ease-out);
+}
+.pk-switch.on .pk-switch-knob {
+  --pk-sx: 22px;
+}
+.pk-switch.pk-held .pk-switch-knob {
+  --pk-sb: var(--pk-knob-grow);
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), inset 0 1px 0.5px rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.pk-switch.pk-dragging .pk-switch-knob {
+  transition:
+    scale calc(var(--dur-quick) * var(--pk-speed)) var(--ease-lift),
+    background-color calc(var(--dur-quick) * var(--pk-speed)) var(--ease-out);
+}
+.pk-switch.pk-swell .pk-switch-knob {
+  animation: pk-swell calc(var(--dur-switch) * var(--pk-speed)) var(--ease-in-out);
+}
+@keyframes pk-swell {
+  45% {
+    scale: 1.18 1.1;
+  }
+}
+.motion-reduced .pk-switch .pk-switch-knob {
+  --pk-sb: 1;
+  animation: none;
+  transition: background-color calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-out);
+}
+.pk-switch:focus-visible,
+.pk-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* (22) slider: the knob grows ×1.35 while held (150 ms) and turns to glass; the fill follows the finger */
+.pk-slider {
+  position: relative;
+  height: 34px;
+  flex: 1;
+  min-width: 80px;
+  touch-action: none;
+  cursor: pointer;
+}
+.pk-slider-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--pk-switch-off);
+  overflow: hidden;
+}
+.pk-slider-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--pk-p, 50%);
+  background: var(--accent);
+}
+.pk-slider-thumb {
+  position: absolute;
+  top: 5px;
+  left: calc(var(--pk-p, 50%) - 19px);
+  width: 38px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--pk-knob);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  transition:
+    scale calc(var(--dur-knob) * var(--pk-speed)) var(--ease-back),
+    background-color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-slider.pk-held .pk-slider-thumb {
+  scale: var(--pk-knob-grow);
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), inset 0 1px 0.5px rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.motion-reduced .pk-slider.pk-held .pk-slider-thumb {
+  scale: none;
+}
+
+/* (23) segmented control: the knob slides on a 350 ms spring, swells to glass when pressed and can be dragged
+   (segmented.style 'gallery', D04). The alternative, 'squish', slides on a curve and squishes. */
+.pk-seg {
+  position: relative;
+  display: flex;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--fill);
+  padding: 2px;
+  touch-action: none;
+}
+.pk-seg > button {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 44px;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 999px;
+  color: var(--fg);
+}
+.pk-seg-ind {
+  left: 2px;
+  top: 2px;
+  bottom: 2px;
+  width: calc((100% - 4px) / var(--pk-n, 2));
+  background: var(--pk-seg-knob);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.pk-seg-squish .pk-seg-ind {
+  transition:
+    translate calc(var(--dur-squish) * var(--pk-speed)) var(--ease-knob),
+    background-color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-seg-ind.pk-squish {
+  animation: pk-squish calc(var(--dur-squish) * var(--pk-speed)) var(--ease-knob);
+}
+@keyframes pk-squish {
+  35% {
+    scale: 1.22 0.86;
+  }
+  70% {
+    scale: 0.96 1.04;
+  }
+}
+.motion-reduced .pk-seg-ind.pk-squish {
+  animation: none;
+}
+
+/* (24) stepper: a glass capsule with − and +; the halves only light up */
+.pk-stepper {
+  display: inline-flex;
+  height: 34px;
+  border-radius: 999px;
+  flex: none;
+}
+.pk-stepper > button {
+  width: 48px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--fg);
+}
+.pk-stepper > button:disabled {
+  opacity: 0.35;
+}
+.pk-stepper-div {
+  width: 0.5px;
+  background: var(--sep);
+  margin: 8px 0;
+}
+
+/* (25) progress: a bar, a spinner and a ring (--pk-v from 0 to 100) */
+.pk-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--pk-switch-off);
+  overflow: hidden;
+  flex: 1;
+}
+.pk-progress > i {
+  display: block;
+  height: 100%;
+  width: calc(var(--pk-v, 0) * 1%);
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width calc(var(--dur-progress) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-spinner {
+  width: 24px;
+  height: 24px;
+  color: var(--fg2);
+  animation: pk-spin calc(var(--dur-spin) * var(--pk-speed)) var(--ease-steps) infinite;
+}
+@keyframes pk-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+.pk-ring {
+  width: 34px;
+  height: 34px;
+  rotate: -90deg;
+}
+.pk-ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+.pk-ring .pk-ring-bg {
+  stroke: var(--pk-switch-off);
+}
+.pk-ring .pk-ring-fg {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--pk-v, 0));
+  transition: stroke-dashoffset calc(var(--dur-progress) * var(--pk-speed)) var(--ease-decel);
+}
+
+/* (26, 27, 29) inputs: solid wells (12% grey in light, 24% in dark), no blur. Text stays at 17 pt so iOS doesn't zoom.
+   (26) the search field stretches when dragged (about 7 pt lengthwise, 2 pt across; measured from Photos) */
+.pk-field,
+.pk-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  border-radius: var(--r-medium);
+  background: var(--fill);
+  padding: 0 12px;
+  color: var(--fg2);
+}
+.pk-search {
+  border-radius: 999px;
+  touch-action: pan-y;
+}
+.pk-search,
+.pk-search-field {
+  transition: scale var(--dur-settle) var(--ease-settle), translate var(--dur-settle) var(--ease-settle);
+}
+.pk-dock .pk-search-field {
+  transition:
+    scale var(--dur-pill) var(--ease-pill),
+    translate var(--dur-settle) var(--ease-settle),
+    opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-stretching {
+  transition: none !important;
+}
+.pk-field input,
+.pk-field textarea,
+.pk-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: 17px;
+  color: var(--fg);
+}
+:is(.pk-field, .pk-search) ::placeholder {
+  color: var(--fg3);
+}
+.pk-field-clear {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--fg3);
+  color: var(--surface);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.pk-has > .pk-field-clear {
+  display: flex;
+}
+.pk-field.pk-area {
+  height: auto;
+  align-items: flex-start;
+  padding: 10px 12px;
+}
+.pk-field.pk-area textarea {
+  resize: none;
+  min-height: 66px;
+  line-height: 1.35;
+  padding: 0;
+  overflow: hidden;
 }
 
 </style>
@@ -3248,7 +3563,15 @@ body > .pk-layer {
   function refreshAll() {
     refreshQueued = false;
     $$(BARS).forEach(refreshBar);
-    $$('.pk-switch').forEach((sw) => sw.setAttribute('aria-checked', String(sw.classList.contains('on'))));
+    $$('.pk-switch').forEach((sw) => {
+      sw.setAttribute('aria-checked', String(sw.classList.contains('on')));
+      if (!sw.hasAttribute('role')) {
+        sw.setAttribute('role', 'switch');
+        if (!sw.hasAttribute('tabindex')) sw.tabIndex = 0;
+      }
+    });
+    initSliders();
+    initSteppers();
   }
   const queueRefresh = () => {
     if (!refreshQueued) {
@@ -3475,6 +3798,226 @@ body > .pk-layer {
     emit(c, 'change', { on });
   });
 
+  /* ============================================================================================================
+     CONTROLS AND INPUTS
+     ============================================================================================================ */
+
+  /* (21) switch: .pk-switch (with a .pk-switch-knob inside); .on when on. Tap, or drag the knob: a flick faster than
+     200 px/s decides, otherwise halfway. pk:change { on }. A .pk-switch-row toggles its switch when tapped too. */
+  let swDrag = null;
+  function setSwitch(sw, on, quiet) {
+    const was = sw.classList.contains('on');
+    sw.classList.toggle('on', on);
+    sw.setAttribute('aria-checked', String(on));
+    const k = sw.querySelector('.pk-switch-knob');
+    if (k) k.style.removeProperty('--pk-sx');
+    if (was !== on && motion.on()) {
+      sw.classList.remove('pk-swell');
+      void sw.offsetWidth;
+      sw.classList.add('pk-swell');
+      after(() => sw.classList.remove('pk-swell'), dur('--dur-switch'));
+    }
+    if (!quiet && was !== on) emit(sw, 'change', { on });
+  }
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const sw = ev.target.closest && ev.target.closest('.pk-switch');
+    if (!sw || sw.getAttribute('aria-disabled') === 'true') return;
+    swDrag = { sw, x: ev.clientX, id: ev.pointerId, on: sw.classList.contains('on'), moved: false, tr: tracker() };
+    try {
+      sw.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    sw.classList.add('pk-held');
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = swDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    const s = scaleOf(d.sw), dx = (ev.clientX - d.x) / s;
+    d.tr.add(ev.clientX / s);
+    if (!d.moved && Math.abs(dx) < 3) return;
+    d.moved = true;
+    d.sw.classList.add('pk-dragging');
+    const x = Math.max(0, Math.min(N.switchTravel, (d.on ? N.switchTravel : 0) + dx));
+    d.sw.querySelector('.pk-switch-knob').style.setProperty('--pk-sx', x + 'px');
+  });
+  function endSwitch(ev) {
+    const d = swDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    swDrag = null;
+    const sw = d.sw;
+    sw.classList.remove('pk-held', 'pk-dragging');
+    if (ev.type === 'pointercancel' && !d.moved) return;
+    let on;
+    if (!d.moved) on = !d.on;
+    else {
+      const v = d.tr.v(), k = sw.querySelector('.pk-switch-knob');
+      const x = parseFloat(k.style.getPropertyValue('--pk-sx')) || 0;
+      on = Math.abs(v) > N.switchFlick ? v > 0 : x > N.switchTravel / 2;
+    }
+    setSwitch(sw, on);
+    sw._pkJust = performance.now();
+  }
+  doc.addEventListener('pointerup', endSwitch);
+  doc.addEventListener('pointercancel', endSwitch);
+  doc.addEventListener('click', (ev) => {
+    // keyboard (Space or Enter on a focused switch) and taps on a .pk-switch-row
+    const sw = ev.target.closest && ev.target.closest('.pk-switch');
+    if (sw) {
+      if (ev.detail === 0) setSwitch(sw, !sw.classList.contains('on'));
+      return;
+    }
+    const row = ev.target.closest && ev.target.closest('.pk-switch-row');
+    const s2 = row && row.querySelector('.pk-switch');
+    if (s2 && !ownedBy(ev.target, row)) setSwitch(s2, !s2.classList.contains('on'));
+  });
+  doc.addEventListener('keydown', (ev) => {
+    const sw = ev.target.closest && ev.target.closest('.pk-switch');
+    if (sw && (ev.key === ' ' || ev.key === 'Enter')) {
+      ev.preventDefault();
+      setSwitch(sw, !sw.classList.contains('on'));
+    }
+    const sl = ev.target.closest && ev.target.closest('.pk-slider');
+    if (sl && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+      ev.preventDefault();
+      const o = sliderOpts(sl);
+      setSlider(sl, o.value + (ev.key === 'ArrowRight' ? 1 : -1) * (o.step || (o.max - o.min) / 20), true);
+    }
+  });
+
+  /* (22) slider: .pk-slider with data-min, data-max, data-step, data-value (0–100 by default). The knob grows ×1.35
+     while held; the fill follows the finger. pk:input while moving, pk:change on letting go. */
+  function sliderOpts(sl) {
+    const n = (k, d) => (sl.dataset[k] != null && sl.dataset[k] !== '' && !isNaN(+sl.dataset[k]) ? +sl.dataset[k] : d);
+    return { min: n('min', 0), max: n('max', 100), step: n('step', 0), value: n('value', 50) };
+  }
+  function setSlider(sl, v, change) {
+    const o = sliderOpts(sl);
+    if (o.step) v = Math.round((v - o.min) / o.step) * o.step + o.min;
+    v = Math.max(o.min, Math.min(o.max, v));
+    v = +v.toFixed(4);
+    sl.dataset.value = String(v);
+    sl.style.setProperty('--pk-p', (((v - o.min) / (o.max - o.min || 1)) * 100).toFixed(2) + '%');
+    sl.setAttribute('aria-valuenow', String(v));
+    emit(sl, change ? 'change' : 'input', { value: v });
+  }
+  let slDrag = null;
+  const slAt = (sl, ev) => {
+    const r = sl.getBoundingClientRect(), o = sliderOpts(sl);
+    return o.min + ((ev.clientX - r.left) / r.width) * (o.max - o.min);
+  };
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const sl = ev.target.closest && ev.target.closest('.pk-slider');
+    if (!sl) return;
+    slDrag = { sl, id: ev.pointerId };
+    try {
+      sl.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    sl.classList.add('pk-held');
+    setSlider(sl, slAt(sl, ev));
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    if (slDrag && ev.pointerId === slDrag.id) setSlider(slDrag.sl, slAt(slDrag.sl, ev));
+  });
+  function endSlider(ev) {
+    const d = slDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    slDrag = null;
+    d.sl.classList.remove('pk-held');
+    setSlider(d.sl, +d.sl.dataset.value, true);
+  }
+  doc.addEventListener('pointerup', endSlider);
+  doc.addEventListener('pointercancel', endSlider);
+  const initSliders = () =>
+    $$('.pk-slider').forEach((sl) => {
+      if (sl.style.getPropertyValue('--pk-p')) return;
+      const o = sliderOpts(sl);
+      sl.style.setProperty('--pk-p', (((o.value - o.min) / (o.max - o.min || 1)) * 100).toFixed(2) + '%');
+      if (!sl.hasAttribute('role')) {
+        sl.setAttribute('role', 'slider');
+        sl.setAttribute('aria-valuemin', String(o.min));
+        sl.setAttribute('aria-valuemax', String(o.max));
+        sl.setAttribute('aria-valuenow', String(o.value));
+        if (!sl.hasAttribute('tabindex')) sl.tabIndex = 0;
+      }
+    });
+
+  /* (24) stepper: .pk-stepper with data-value, data-min, data-max, data-step and two buttons with data-step="-1" / "1".
+     A .pk-stepper-value inside (or [data-pk-value-of="#stepper-id"] anywhere) shows the value. pk:change { value } */
+  function setStepper(st, v, quiet) {
+    const n = (k, d) => (st.dataset[k] != null && st.dataset[k] !== '' && !isNaN(+st.dataset[k]) ? +st.dataset[k] : d);
+    const min = n('min', -Infinity), max = n('max', Infinity);
+    v = Math.max(min, Math.min(max, v));
+    st.dataset.value = String(v);
+    $$('[data-step]', st).forEach((b) => (b.disabled = (+b.dataset.step < 0 && v <= min) || (+b.dataset.step > 0 && v >= max)));
+    const out = st.querySelector('.pk-stepper-value');
+    const show = (o) => {
+      if (o.textContent !== String(v)) o.textContent = String(v);
+    };
+    if (out) show(out);
+    if (st.id) $$('[data-pk-value-of="#' + st.id + '"]').forEach(show);
+    if (!quiet) emit(st, 'change', { value: v });
+  }
+  doc.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.pk-stepper [data-step]');
+    if (!b) return;
+    const st = b.closest('.pk-stepper');
+    setStepper(st, (+st.dataset.value || 0) + (+b.dataset.step || 0) * (+st.dataset.step || 1));
+  });
+  const initSteppers = () => $$('.pk-stepper').forEach((st) => setStepper(st, +st.dataset.value || 0, true));
+
+  /* (26, 27, 29) fields: the clear button shows once there's text; a .pk-area text area grows as you type */
+  doc.addEventListener('input', (ev) => {
+    const t = ev.target;
+    const f = t.closest && t.closest('.pk-field, .pk-search, .pk-search-field');
+    if (!f) return;
+    f.classList.toggle('pk-has', !!t.value);
+    if (t.tagName === 'TEXTAREA' && f.classList.contains('pk-area')) {
+      t.style.height = 'auto';
+      t.style.height = Math.max(66, t.scrollHeight) + 'px';
+    }
+  });
+  doc.addEventListener('click', (ev) => {
+    const c = ev.target.closest && ev.target.closest('.pk-field-clear');
+    if (!c) return;
+    ev.preventDefault();
+    const f = c.parentElement, inp = f.querySelector('input, textarea');
+    if (!inp) return;
+    inp.value = '';
+    f.classList.remove('pk-has');
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    inp.focus();
+  });
+  // (26) dragging a search field stretches it a little toward the finger, then it springs back
+  let stretch = null;
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const f = ev.target.closest && ev.target.closest('.pk-search, .pk-dock.pk-searching .pk-search-field');
+    if (!f || (ev.target.tagName === 'INPUT' && doc.activeElement === ev.target) || ev.target.closest('.pk-field-clear')) return;
+    stretch = { f, x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = stretch;
+    if (!d || ev.pointerId !== d.id || motion.reduced()) return;
+    const s = scaleOf(d.f), dx = (ev.clientX - d.x) / s, dy = (ev.clientY - d.y) / s;
+    const sat = (v, max) => Math.sign(v) * max * (1 - Math.exp(-Math.abs(v) / 30));
+    const sx = sat(dx, N.stretchLong), sy = sat(dy, N.stretchShort);
+    d.f.classList.add('pk-stretching');
+    d.f.style.transformOrigin = (dx > 0 ? 'left' : 'right') + ' ' + (dy > 0 ? 'top' : 'bottom');
+    d.f.style.scale = (1 + Math.abs(sx) / d.f.offsetWidth).toFixed(4) + ' ' + (1 + Math.abs(sy) / d.f.offsetHeight).toFixed(4);
+    d.f.style.translate = (sx * 0.3).toFixed(2) + 'px ' + (sy * 0.3).toFixed(2) + 'px';
+  });
+  function endStretch(ev) {
+    const d = stretch;
+    if (!d || ev.pointerId !== d.id) return;
+    stretch = null;
+    d.f.classList.remove('pk-stretching');
+    d.f.style.removeProperty('scale');
+    d.f.style.removeProperty('translate');
+  }
+  doc.addEventListener('pointerup', endStretch);
+  doc.addEventListener('pointercancel', endStretch);
+
   /* ==PARTS== (each group below adds its part) */
 
   /* ============================================================================================================
@@ -3500,6 +4043,18 @@ body > .pk-layer {
     layer,
     rel,
     refresh: refreshAll,
+    html: {
+      // the 8-spoke iOS spinner
+      spinner: () => {
+        let l = '';
+        for (let i = 0; i < 8; i++)
+          l += '<line x1="12" y1="3" x2="12" y2="7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity="' + (0.25 + i * 0.1).toFixed(2) + '" transform="rotate(' + i * 45 + ' 12 12)"/>';
+        return '<svg class="pk-spinner" viewBox="0 0 24 24" data-name="Spinner" aria-label="Loading">' + l + '</svg>';
+      },
+    },
+    setSwitch: (sw, on) => setSwitch(sw, !!on, true),
+    setSlider: (sl, v) => setSlider(sl, v, false),
+    setStepper: (st, v) => setStepper(st, v, true),
     select: (barEl, i) => selectBar(barEl, i, true),
     push,
     pop,
@@ -3611,6 +4166,28 @@ H += part(18, 'Chips', 'e', 'Tap to pick. Picked chips take the accent colour. <
 H += part(19, 'Badges', 'e', 'A count on a button, and a small word badge. <code>.pk-badge</code> <code>.pk-tag</code>',
   stage(`<span class="pk-badged"><button class="pk-btn pk-circle pk-glass pk-press" data-name="Button with count" aria-label="Notifications">${ic('bell')}</button><span class="pk-badge" data-name="Count badge">3</span></span><span class="pk-tag" data-name="Word badge">New</span>`));
 
+
+const swRow = (t, on) => row(t, '', null, `<span class="pk-switch${on ? ' on' : ''}" data-name="Switch: ${t}" aria-label="${t}"><span class="pk-switch-knob"></span></span>`).replace('class="pk-row"', 'class="pk-row pk-switch-row"');
+H += sec('controls', 'Controls');
+H += part(21, 'Switch', 'e', '64 × 28. Pressed, the knob turns to glass and swells; it travels over 380 ms. Drag it: a flick faster than 200 px/s decides, otherwise halfway. Tapping the row works too. <code>.pk-switch</code>',
+  `<div class="pk-list" data-name="Switches">${swRow('Reminders', true)}${swRow('Sounds', false)}</div>`);
+H += part(22, 'Slider', 'e', 'The knob grows ×1.35 while held (150 ms) and turns to glass; the fill follows the finger. <code>.pk-slider</code>',
+  `<div class="pk-list"><div class="pk-row" data-name="Row: Volume"><span style="color:var(--fg2)">${ic('note', 18)}</span><div class="pk-slider" id="vol" data-value="40" data-name="Slider" aria-label="Volume"><div class="pk-slider-track"><div class="pk-slider-fill"></div></div><div class="pk-slider-thumb"></div></div><span class="pk-row-value" id="slv" style="width:38px;text-align:right">40</span></div></div>`);
+H += part(23, 'Segmented control', 'e', 'The knob slides on a 350 ms spring and swells to glass when pressed. You can drag it. The alternative (<code>segmented.style</code> squish, D04) slides on a curve and squishes. <code>.pk-seg</code>',
+  `<div class="pk-list" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px"><div class="pk-seg" id="segDWM" data-name="Segmented: Day Week Month"><span class="pk-seg-ind"></span><button class="on">Day</button><button>Week</button><button>Month</button></div><div class="pk-seg" data-name="Segmented: List Grid"><span class="pk-seg-ind"></span><button class="on">List</button><button>Grid</button></div></div>`);
+H += part(24, 'Stepper', 'e', 'A glass capsule with − and +; the halves only light up. <code>.pk-stepper</code>',
+  `<div class="pk-list"><div class="pk-row" data-name="Row: Sets"><span class="pk-row-text">Sets</span><span class="pk-row-value" data-pk-value-of="#sets" style="min-width:24px;text-align:center;color:var(--fg)">3</span><div class="pk-stepper pk-glass" id="sets" data-value="3" data-min="0" data-max="20" data-name="Stepper"><button class="pk-press-bar" data-step="-1" data-name="Minus" aria-label="Fewer">${ic('minus', 18)}</button><span class="pk-stepper-div"></span><button class="pk-press-bar" data-step="1" data-name="Plus" aria-label="More">${ic('plus', 18)}</button></div></div></div>`);
+H += part(25, 'Progress', 'e', 'A bar, a spinner and a ring. Tap Run to move them. <code>.pk-progress</code> <code>.pk-spinner</code> <code>.pk-ring</code>',
+  `<div class="pk-list"><div class="pk-row" data-name="Row: Progress"><div class="pk-progress" id="pb" style="--pk-v:35" data-name="Progress bar"><i></i></div>${Parts.html.spinner()}<svg class="pk-ring" id="ring" style="--pk-v:35" viewBox="0 0 34 34" data-name="Progress ring"><circle class="pk-ring-bg" cx="17" cy="17" r="14"/><circle class="pk-ring-fg" cx="17" cy="17" r="14" pathLength="100"/></svg><button class="pk-btn pk-text" id="runBtn" data-name="Run button">Run</button></div></div>`);
+
+H += sec('inputs', 'Inputs');
+H += part(26, 'Search field', 'mx', 'A solid well, 12% grey in light, 24% in dark, with no blur. Drag it: it stretches about 7 pt lengthwise and 2 pt across (measured, from Photos), then springs back. The tab bar\'s glass search field does the same. <code>.pk-search</code>',
+  `<label class="pk-search" data-name="Search field">${ic('search', 18)}<input placeholder="Search" aria-label="Search"><button class="pk-field-clear" data-name="Clear" aria-label="Clear">${ic('x', 12, 3)}</button></label>`);
+H += part(27, 'Text field', 'e', 'A solid well, 44 pt, corners 14. Text stays at 17 pt so iOS doesn\'t zoom. <code>.pk-field</code>',
+  `<label class="pk-field" data-name="Text field"><input placeholder="Title" aria-label="Title"><button class="pk-field-clear" data-name="Clear" aria-label="Clear">${ic('x', 12, 3)}</button></label>`);
+H += part(29, 'Text area', 'e', 'Grows as you type. <code>.pk-field.pk-area</code>',
+  `<label class="pk-field pk-area" data-name="Text area"><textarea rows="3" placeholder="Add a note" aria-label="Note"></textarea></label>`);
+
 /* ==SECTIONS== */
 
 H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in 1.0: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
@@ -3649,6 +4226,11 @@ $('#pushBack').addEventListener('click', () => Parts.pop($('#push')));
     Parts.bar.swap(R, ic(st ? 'more' : 'plus')); $('#mbGo').textContent = st ? 'Go back' : 'Next page'; }); })();
 $('#pullBtn').addEventListener('click', () => { if (Parts.menu) Parts.menu($('#pullBtn'), [{ label: 'Name', icon: ic('check', 18) }, { label: 'Date added' }, { label: 'Last opened' }, '-', { label: 'Ascending', icon: ic('chevD', 18) }], { onPick: it => Parts.toast && Parts.toast(it.label) }); });
 $('#moreBtn').addEventListener('click', () => { if (Parts.menu) Parts.menu($('#moreBtn'), [{ label: 'Expand all', icon: ic('list', 18) }, { label: 'Collapse all', icon: ic('minus', 18) }, '-', { label: 'About these parts', icon: ic('star', 18) }], { onPick: it => Parts.toast && Parts.toast(it.label) }); });
+
+
+/* ---------- demos: controls ---------- */
+$('#vol').addEventListener('pk:input', e => $('#slv').textContent = Math.round(e.detail.value));
+(() => { let p = 35; $('#runBtn').addEventListener('click', () => { p = p >= 100 ? 10 : Math.min(100, p + 25); $('#pb').style.setProperty('--pk-v', p); $('#ring').style.setProperty('--pk-v', p); }); })();
 
 /* ==BEHAVIOUR== */
 

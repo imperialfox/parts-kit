@@ -76,6 +76,7 @@
   /* press */
   --press: 0.93; /* solid buttons */
   --press-row: 0.98; /* rows, when row.press is 'shrink' */
+  --pk-knob-grow: 1.35; /* a switch or slider knob while held */
 
   /* easings (fixed curves; the springs are --ease-gentle … published by the motion core) */
   --ease-pop: cubic-bezier(0.3, 1.7, 0.45, 1); /* the solid press settle */
@@ -243,7 +244,7 @@
 /* ===================================================================================================================
    FOUNDATIONS
    =================================================================================================================== */
-:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button) {
+:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button, .pk-field-clear) {
   font: inherit;
   color: inherit;
   border: 0;
@@ -930,4 +931,318 @@ body > .pk-layer {
   color: var(--on-accent);
   display: inline-flex;
   align-items: center;
+}
+
+/* ===================================================================================================================
+   CONTROLS AND INPUTS
+   =================================================================================================================== */
+
+/* (21) switch: 64 × 28. Pressed, the knob turns to glass and swells; it travels over 380 ms. Drag it: a flick faster
+   than 200 px/s decides, otherwise whichever side it's past halfway. */
+.pk-switch {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--pk-switch-off);
+  flex: none;
+  touch-action: none;
+  cursor: pointer;
+  transition: background-color calc(var(--dur-switch) * var(--pk-speed)) var(--ease-in-out);
+}
+.pk-switch.on {
+  background: var(--good);
+}
+.pk-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 38px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--pk-knob);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  translate: var(--pk-sx, 0px) 0;
+  scale: var(--pk-sb, 1);
+  transition:
+    translate calc(var(--dur-switch) * var(--pk-speed)) var(--ease-in-out),
+    scale calc(var(--dur-quick) * var(--pk-speed)) var(--ease-lift),
+    background-color calc(var(--dur-quick) * var(--pk-speed)) var(--ease-out),
+    box-shadow calc(var(--dur-quick) * var(--pk-speed)) var(--ease-out);
+}
+.pk-switch.on .pk-switch-knob {
+  --pk-sx: 22px;
+}
+.pk-switch.pk-held .pk-switch-knob {
+  --pk-sb: var(--pk-knob-grow);
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), inset 0 1px 0.5px rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.pk-switch.pk-dragging .pk-switch-knob {
+  transition:
+    scale calc(var(--dur-quick) * var(--pk-speed)) var(--ease-lift),
+    background-color calc(var(--dur-quick) * var(--pk-speed)) var(--ease-out);
+}
+.pk-switch.pk-swell .pk-switch-knob {
+  animation: pk-swell calc(var(--dur-switch) * var(--pk-speed)) var(--ease-in-out);
+}
+@keyframes pk-swell {
+  45% {
+    scale: 1.18 1.1;
+  }
+}
+.motion-reduced .pk-switch .pk-switch-knob {
+  --pk-sb: 1;
+  animation: none;
+  transition: background-color calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-out);
+}
+.pk-switch:focus-visible,
+.pk-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* (22) slider: the knob grows ×1.35 while held (150 ms) and turns to glass; the fill follows the finger */
+.pk-slider {
+  position: relative;
+  height: 34px;
+  flex: 1;
+  min-width: 80px;
+  touch-action: none;
+  cursor: pointer;
+}
+.pk-slider-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--pk-switch-off);
+  overflow: hidden;
+}
+.pk-slider-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--pk-p, 50%);
+  background: var(--accent);
+}
+.pk-slider-thumb {
+  position: absolute;
+  top: 5px;
+  left: calc(var(--pk-p, 50%) - 19px);
+  width: 38px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--pk-knob);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  transition:
+    scale calc(var(--dur-knob) * var(--pk-speed)) var(--ease-back),
+    background-color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-slider.pk-held .pk-slider-thumb {
+  scale: var(--pk-knob-grow);
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), inset 0 1px 0.5px rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.motion-reduced .pk-slider.pk-held .pk-slider-thumb {
+  scale: none;
+}
+
+/* (23) segmented control: the knob slides on a 350 ms spring, swells to glass when pressed and can be dragged
+   (segmented.style 'gallery', D04). The alternative, 'squish', slides on a curve and squishes. */
+.pk-seg {
+  position: relative;
+  display: flex;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--fill);
+  padding: 2px;
+  touch-action: none;
+}
+.pk-seg > button {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 44px;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 999px;
+  color: var(--fg);
+}
+.pk-seg-ind {
+  left: 2px;
+  top: 2px;
+  bottom: 2px;
+  width: calc((100% - 4px) / var(--pk-n, 2));
+  background: var(--pk-seg-knob);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.pk-seg-squish .pk-seg-ind {
+  transition:
+    translate calc(var(--dur-squish) * var(--pk-speed)) var(--ease-knob),
+    background-color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-seg-ind.pk-squish {
+  animation: pk-squish calc(var(--dur-squish) * var(--pk-speed)) var(--ease-knob);
+}
+@keyframes pk-squish {
+  35% {
+    scale: 1.22 0.86;
+  }
+  70% {
+    scale: 0.96 1.04;
+  }
+}
+.motion-reduced .pk-seg-ind.pk-squish {
+  animation: none;
+}
+
+/* (24) stepper: a glass capsule with − and +; the halves only light up */
+.pk-stepper {
+  display: inline-flex;
+  height: 34px;
+  border-radius: 999px;
+  flex: none;
+}
+.pk-stepper > button {
+  width: 48px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--fg);
+}
+.pk-stepper > button:disabled {
+  opacity: 0.35;
+}
+.pk-stepper-div {
+  width: 0.5px;
+  background: var(--sep);
+  margin: 8px 0;
+}
+
+/* (25) progress: a bar, a spinner and a ring (--pk-v from 0 to 100) */
+.pk-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--pk-switch-off);
+  overflow: hidden;
+  flex: 1;
+}
+.pk-progress > i {
+  display: block;
+  height: 100%;
+  width: calc(var(--pk-v, 0) * 1%);
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width calc(var(--dur-progress) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-spinner {
+  width: 24px;
+  height: 24px;
+  color: var(--fg2);
+  animation: pk-spin calc(var(--dur-spin) * var(--pk-speed)) var(--ease-steps) infinite;
+}
+@keyframes pk-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+.pk-ring {
+  width: 34px;
+  height: 34px;
+  rotate: -90deg;
+}
+.pk-ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+.pk-ring .pk-ring-bg {
+  stroke: var(--pk-switch-off);
+}
+.pk-ring .pk-ring-fg {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--pk-v, 0));
+  transition: stroke-dashoffset calc(var(--dur-progress) * var(--pk-speed)) var(--ease-decel);
+}
+
+/* (26, 27, 29) inputs: solid wells (12% grey in light, 24% in dark), no blur. Text stays at 17 pt so iOS doesn't zoom.
+   (26) the search field stretches when dragged (about 7 pt lengthwise, 2 pt across; measured from Photos) */
+.pk-field,
+.pk-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  border-radius: var(--r-medium);
+  background: var(--fill);
+  padding: 0 12px;
+  color: var(--fg2);
+}
+.pk-search {
+  border-radius: 999px;
+  touch-action: pan-y;
+}
+.pk-search,
+.pk-search-field {
+  transition: scale var(--dur-settle) var(--ease-settle), translate var(--dur-settle) var(--ease-settle);
+}
+.pk-dock .pk-search-field {
+  transition:
+    scale var(--dur-pill) var(--ease-pill),
+    translate var(--dur-settle) var(--ease-settle),
+    opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-stretching {
+  transition: none !important;
+}
+.pk-field input,
+.pk-field textarea,
+.pk-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: 17px;
+  color: var(--fg);
+}
+:is(.pk-field, .pk-search) ::placeholder {
+  color: var(--fg3);
+}
+.pk-field-clear {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--fg3);
+  color: var(--surface);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.pk-has > .pk-field-clear {
+  display: flex;
+}
+.pk-field.pk-area {
+  height: auto;
+  align-items: flex-start;
+  padding: 10px 12px;
+}
+.pk-field.pk-area textarea {
+  resize: none;
+  min-height: 66px;
+  line-height: 1.35;
+  padding: 0;
+  overflow: hidden;
 }

@@ -173,6 +173,28 @@ H += part(18, 'Chips', 'e', 'Tap to pick. Picked chips take the accent colour. <
 H += part(19, 'Badges', 'e', 'A count on a button, and a small word badge. <code>.pk-badge</code> <code>.pk-tag</code>',
   stage(`<span class="pk-badged"><button class="pk-btn pk-circle pk-glass pk-press" data-name="Button with count" aria-label="Notifications">${ic('bell')}</button><span class="pk-badge" data-name="Count badge">3</span></span><span class="pk-tag" data-name="Word badge">New</span>`));
 
+
+const swRow = (t, on) => row(t, '', null, `<span class="pk-switch${on ? ' on' : ''}" data-name="Switch: ${t}" aria-label="${t}"><span class="pk-switch-knob"></span></span>`).replace('class="pk-row"', 'class="pk-row pk-switch-row"');
+H += sec('controls', 'Controls');
+H += part(21, 'Switch', 'e', '64 × 28. Pressed, the knob turns to glass and swells; it travels over 380 ms. Drag it: a flick faster than 200 px/s decides, otherwise halfway. Tapping the row works too. <code>.pk-switch</code>',
+  `<div class="pk-list" data-name="Switches">${swRow('Reminders', true)}${swRow('Sounds', false)}</div>`);
+H += part(22, 'Slider', 'e', 'The knob grows ×1.35 while held (150 ms) and turns to glass; the fill follows the finger. <code>.pk-slider</code>',
+  `<div class="pk-list"><div class="pk-row" data-name="Row: Volume"><span style="color:var(--fg2)">${ic('note', 18)}</span><div class="pk-slider" id="vol" data-value="40" data-name="Slider" aria-label="Volume"><div class="pk-slider-track"><div class="pk-slider-fill"></div></div><div class="pk-slider-thumb"></div></div><span class="pk-row-value" id="slv" style="width:38px;text-align:right">40</span></div></div>`);
+H += part(23, 'Segmented control', 'e', 'The knob slides on a 350 ms spring and swells to glass when pressed. You can drag it. The alternative (<code>segmented.style</code> squish, D04) slides on a curve and squishes. <code>.pk-seg</code>',
+  `<div class="pk-list" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px"><div class="pk-seg" id="segDWM" data-name="Segmented: Day Week Month"><span class="pk-seg-ind"></span><button class="on">Day</button><button>Week</button><button>Month</button></div><div class="pk-seg" data-name="Segmented: List Grid"><span class="pk-seg-ind"></span><button class="on">List</button><button>Grid</button></div></div>`);
+H += part(24, 'Stepper', 'e', 'A glass capsule with − and +; the halves only light up. <code>.pk-stepper</code>',
+  `<div class="pk-list"><div class="pk-row" data-name="Row: Sets"><span class="pk-row-text">Sets</span><span class="pk-row-value" data-pk-value-of="#sets" style="min-width:24px;text-align:center;color:var(--fg)">3</span><div class="pk-stepper pk-glass" id="sets" data-value="3" data-min="0" data-max="20" data-name="Stepper"><button class="pk-press-bar" data-step="-1" data-name="Minus" aria-label="Fewer">${ic('minus', 18)}</button><span class="pk-stepper-div"></span><button class="pk-press-bar" data-step="1" data-name="Plus" aria-label="More">${ic('plus', 18)}</button></div></div></div>`);
+H += part(25, 'Progress', 'e', 'A bar, a spinner and a ring. Tap Run to move them. <code>.pk-progress</code> <code>.pk-spinner</code> <code>.pk-ring</code>',
+  `<div class="pk-list"><div class="pk-row" data-name="Row: Progress"><div class="pk-progress" id="pb" style="--pk-v:35" data-name="Progress bar"><i></i></div>${Parts.html.spinner()}<svg class="pk-ring" id="ring" style="--pk-v:35" viewBox="0 0 34 34" data-name="Progress ring"><circle class="pk-ring-bg" cx="17" cy="17" r="14"/><circle class="pk-ring-fg" cx="17" cy="17" r="14" pathLength="100"/></svg><button class="pk-btn pk-text" id="runBtn" data-name="Run button">Run</button></div></div>`);
+
+H += sec('inputs', 'Inputs');
+H += part(26, 'Search field', 'mx', 'A solid well, 12% grey in light, 24% in dark, with no blur. Drag it: it stretches about 7 pt lengthwise and 2 pt across (measured, from Photos), then springs back. The tab bar\'s glass search field does the same. <code>.pk-search</code>',
+  `<label class="pk-search" data-name="Search field">${ic('search', 18)}<input placeholder="Search" aria-label="Search"><button class="pk-field-clear" data-name="Clear" aria-label="Clear">${ic('x', 12, 3)}</button></label>`);
+H += part(27, 'Text field', 'e', 'A solid well, 44 pt, corners 14. Text stays at 17 pt so iOS doesn\'t zoom. <code>.pk-field</code>',
+  `<label class="pk-field" data-name="Text field"><input placeholder="Title" aria-label="Title"><button class="pk-field-clear" data-name="Clear" aria-label="Clear">${ic('x', 12, 3)}</button></label>`);
+H += part(29, 'Text area', 'e', 'Grows as you type. <code>.pk-field.pk-area</code>',
+  `<label class="pk-field pk-area" data-name="Text area"><textarea rows="3" placeholder="Add a note" aria-label="Note"></textarea></label>`);
+
 /* ==SECTIONS== */
 
 H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in 1.0: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
@@ -211,6 +233,11 @@ $('#pushBack').addEventListener('click', () => Parts.pop($('#push')));
     Parts.bar.swap(R, ic(st ? 'more' : 'plus')); $('#mbGo').textContent = st ? 'Go back' : 'Next page'; }); })();
 $('#pullBtn').addEventListener('click', () => { if (Parts.menu) Parts.menu($('#pullBtn'), [{ label: 'Name', icon: ic('check', 18) }, { label: 'Date added' }, { label: 'Last opened' }, '-', { label: 'Ascending', icon: ic('chevD', 18) }], { onPick: it => Parts.toast && Parts.toast(it.label) }); });
 $('#moreBtn').addEventListener('click', () => { if (Parts.menu) Parts.menu($('#moreBtn'), [{ label: 'Expand all', icon: ic('list', 18) }, { label: 'Collapse all', icon: ic('minus', 18) }, '-', { label: 'About these parts', icon: ic('star', 18) }], { onPick: it => Parts.toast && Parts.toast(it.label) }); });
+
+
+/* ---------- demos: controls ---------- */
+$('#vol').addEventListener('pk:input', e => $('#slv').textContent = Math.round(e.detail.value));
+(() => { let p = 35; $('#runBtn').addEventListener('click', () => { p = p >= 100 ? 10 : Math.min(100, p + 25); $('#pb').style.setProperty('--pk-v', p); $('#ring').style.setProperty('--pk-v', p); }); })();
 
 /* ==BEHAVIOUR== */
 

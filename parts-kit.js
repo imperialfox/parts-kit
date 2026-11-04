@@ -585,7 +585,15 @@
   function refreshAll() {
     refreshQueued = false;
     $$(BARS).forEach(refreshBar);
-    $$('.pk-switch').forEach((sw) => sw.setAttribute('aria-checked', String(sw.classList.contains('on'))));
+    $$('.pk-switch').forEach((sw) => {
+      sw.setAttribute('aria-checked', String(sw.classList.contains('on')));
+      if (!sw.hasAttribute('role')) {
+        sw.setAttribute('role', 'switch');
+        if (!sw.hasAttribute('tabindex')) sw.tabIndex = 0;
+      }
+    });
+    initSliders();
+    initSteppers();
   }
   const queueRefresh = () => {
     if (!refreshQueued) {
@@ -812,6 +820,226 @@
     emit(c, 'change', { on });
   });
 
+  /* ============================================================================================================
+     CONTROLS AND INPUTS
+     ============================================================================================================ */
+
+  /* (21) switch: .pk-switch (with a .pk-switch-knob inside); .on when on. Tap, or drag the knob: a flick faster than
+     200 px/s decides, otherwise halfway. pk:change { on }. A .pk-switch-row toggles its switch when tapped too. */
+  let swDrag = null;
+  function setSwitch(sw, on, quiet) {
+    const was = sw.classList.contains('on');
+    sw.classList.toggle('on', on);
+    sw.setAttribute('aria-checked', String(on));
+    const k = sw.querySelector('.pk-switch-knob');
+    if (k) k.style.removeProperty('--pk-sx');
+    if (was !== on && motion.on()) {
+      sw.classList.remove('pk-swell');
+      void sw.offsetWidth;
+      sw.classList.add('pk-swell');
+      after(() => sw.classList.remove('pk-swell'), dur('--dur-switch'));
+    }
+    if (!quiet && was !== on) emit(sw, 'change', { on });
+  }
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const sw = ev.target.closest && ev.target.closest('.pk-switch');
+    if (!sw || sw.getAttribute('aria-disabled') === 'true') return;
+    swDrag = { sw, x: ev.clientX, id: ev.pointerId, on: sw.classList.contains('on'), moved: false, tr: tracker() };
+    try {
+      sw.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    sw.classList.add('pk-held');
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = swDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    const s = scaleOf(d.sw), dx = (ev.clientX - d.x) / s;
+    d.tr.add(ev.clientX / s);
+    if (!d.moved && Math.abs(dx) < 3) return;
+    d.moved = true;
+    d.sw.classList.add('pk-dragging');
+    const x = Math.max(0, Math.min(N.switchTravel, (d.on ? N.switchTravel : 0) + dx));
+    d.sw.querySelector('.pk-switch-knob').style.setProperty('--pk-sx', x + 'px');
+  });
+  function endSwitch(ev) {
+    const d = swDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    swDrag = null;
+    const sw = d.sw;
+    sw.classList.remove('pk-held', 'pk-dragging');
+    if (ev.type === 'pointercancel' && !d.moved) return;
+    let on;
+    if (!d.moved) on = !d.on;
+    else {
+      const v = d.tr.v(), k = sw.querySelector('.pk-switch-knob');
+      const x = parseFloat(k.style.getPropertyValue('--pk-sx')) || 0;
+      on = Math.abs(v) > N.switchFlick ? v > 0 : x > N.switchTravel / 2;
+    }
+    setSwitch(sw, on);
+    sw._pkJust = performance.now();
+  }
+  doc.addEventListener('pointerup', endSwitch);
+  doc.addEventListener('pointercancel', endSwitch);
+  doc.addEventListener('click', (ev) => {
+    // keyboard (Space or Enter on a focused switch) and taps on a .pk-switch-row
+    const sw = ev.target.closest && ev.target.closest('.pk-switch');
+    if (sw) {
+      if (ev.detail === 0) setSwitch(sw, !sw.classList.contains('on'));
+      return;
+    }
+    const row = ev.target.closest && ev.target.closest('.pk-switch-row');
+    const s2 = row && row.querySelector('.pk-switch');
+    if (s2 && !ownedBy(ev.target, row)) setSwitch(s2, !s2.classList.contains('on'));
+  });
+  doc.addEventListener('keydown', (ev) => {
+    const sw = ev.target.closest && ev.target.closest('.pk-switch');
+    if (sw && (ev.key === ' ' || ev.key === 'Enter')) {
+      ev.preventDefault();
+      setSwitch(sw, !sw.classList.contains('on'));
+    }
+    const sl = ev.target.closest && ev.target.closest('.pk-slider');
+    if (sl && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+      ev.preventDefault();
+      const o = sliderOpts(sl);
+      setSlider(sl, o.value + (ev.key === 'ArrowRight' ? 1 : -1) * (o.step || (o.max - o.min) / 20), true);
+    }
+  });
+
+  /* (22) slider: .pk-slider with data-min, data-max, data-step, data-value (0–100 by default). The knob grows ×1.35
+     while held; the fill follows the finger. pk:input while moving, pk:change on letting go. */
+  function sliderOpts(sl) {
+    const n = (k, d) => (sl.dataset[k] != null && sl.dataset[k] !== '' && !isNaN(+sl.dataset[k]) ? +sl.dataset[k] : d);
+    return { min: n('min', 0), max: n('max', 100), step: n('step', 0), value: n('value', 50) };
+  }
+  function setSlider(sl, v, change) {
+    const o = sliderOpts(sl);
+    if (o.step) v = Math.round((v - o.min) / o.step) * o.step + o.min;
+    v = Math.max(o.min, Math.min(o.max, v));
+    v = +v.toFixed(4);
+    sl.dataset.value = String(v);
+    sl.style.setProperty('--pk-p', (((v - o.min) / (o.max - o.min || 1)) * 100).toFixed(2) + '%');
+    sl.setAttribute('aria-valuenow', String(v));
+    emit(sl, change ? 'change' : 'input', { value: v });
+  }
+  let slDrag = null;
+  const slAt = (sl, ev) => {
+    const r = sl.getBoundingClientRect(), o = sliderOpts(sl);
+    return o.min + ((ev.clientX - r.left) / r.width) * (o.max - o.min);
+  };
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const sl = ev.target.closest && ev.target.closest('.pk-slider');
+    if (!sl) return;
+    slDrag = { sl, id: ev.pointerId };
+    try {
+      sl.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    sl.classList.add('pk-held');
+    setSlider(sl, slAt(sl, ev));
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    if (slDrag && ev.pointerId === slDrag.id) setSlider(slDrag.sl, slAt(slDrag.sl, ev));
+  });
+  function endSlider(ev) {
+    const d = slDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    slDrag = null;
+    d.sl.classList.remove('pk-held');
+    setSlider(d.sl, +d.sl.dataset.value, true);
+  }
+  doc.addEventListener('pointerup', endSlider);
+  doc.addEventListener('pointercancel', endSlider);
+  const initSliders = () =>
+    $$('.pk-slider').forEach((sl) => {
+      if (sl.style.getPropertyValue('--pk-p')) return;
+      const o = sliderOpts(sl);
+      sl.style.setProperty('--pk-p', (((o.value - o.min) / (o.max - o.min || 1)) * 100).toFixed(2) + '%');
+      if (!sl.hasAttribute('role')) {
+        sl.setAttribute('role', 'slider');
+        sl.setAttribute('aria-valuemin', String(o.min));
+        sl.setAttribute('aria-valuemax', String(o.max));
+        sl.setAttribute('aria-valuenow', String(o.value));
+        if (!sl.hasAttribute('tabindex')) sl.tabIndex = 0;
+      }
+    });
+
+  /* (24) stepper: .pk-stepper with data-value, data-min, data-max, data-step and two buttons with data-step="-1" / "1".
+     A .pk-stepper-value inside (or [data-pk-value-of="#stepper-id"] anywhere) shows the value. pk:change { value } */
+  function setStepper(st, v, quiet) {
+    const n = (k, d) => (st.dataset[k] != null && st.dataset[k] !== '' && !isNaN(+st.dataset[k]) ? +st.dataset[k] : d);
+    const min = n('min', -Infinity), max = n('max', Infinity);
+    v = Math.max(min, Math.min(max, v));
+    st.dataset.value = String(v);
+    $$('[data-step]', st).forEach((b) => (b.disabled = (+b.dataset.step < 0 && v <= min) || (+b.dataset.step > 0 && v >= max)));
+    const out = st.querySelector('.pk-stepper-value');
+    const show = (o) => {
+      if (o.textContent !== String(v)) o.textContent = String(v);
+    };
+    if (out) show(out);
+    if (st.id) $$('[data-pk-value-of="#' + st.id + '"]').forEach(show);
+    if (!quiet) emit(st, 'change', { value: v });
+  }
+  doc.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.pk-stepper [data-step]');
+    if (!b) return;
+    const st = b.closest('.pk-stepper');
+    setStepper(st, (+st.dataset.value || 0) + (+b.dataset.step || 0) * (+st.dataset.step || 1));
+  });
+  const initSteppers = () => $$('.pk-stepper').forEach((st) => setStepper(st, +st.dataset.value || 0, true));
+
+  /* (26, 27, 29) fields: the clear button shows once there's text; a .pk-area text area grows as you type */
+  doc.addEventListener('input', (ev) => {
+    const t = ev.target;
+    const f = t.closest && t.closest('.pk-field, .pk-search, .pk-search-field');
+    if (!f) return;
+    f.classList.toggle('pk-has', !!t.value);
+    if (t.tagName === 'TEXTAREA' && f.classList.contains('pk-area')) {
+      t.style.height = 'auto';
+      t.style.height = Math.max(66, t.scrollHeight) + 'px';
+    }
+  });
+  doc.addEventListener('click', (ev) => {
+    const c = ev.target.closest && ev.target.closest('.pk-field-clear');
+    if (!c) return;
+    ev.preventDefault();
+    const f = c.parentElement, inp = f.querySelector('input, textarea');
+    if (!inp) return;
+    inp.value = '';
+    f.classList.remove('pk-has');
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    inp.focus();
+  });
+  // (26) dragging a search field stretches it a little toward the finger, then it springs back
+  let stretch = null;
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const f = ev.target.closest && ev.target.closest('.pk-search, .pk-dock.pk-searching .pk-search-field');
+    if (!f || (ev.target.tagName === 'INPUT' && doc.activeElement === ev.target) || ev.target.closest('.pk-field-clear')) return;
+    stretch = { f, x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = stretch;
+    if (!d || ev.pointerId !== d.id || motion.reduced()) return;
+    const s = scaleOf(d.f), dx = (ev.clientX - d.x) / s, dy = (ev.clientY - d.y) / s;
+    const sat = (v, max) => Math.sign(v) * max * (1 - Math.exp(-Math.abs(v) / 30));
+    const sx = sat(dx, N.stretchLong), sy = sat(dy, N.stretchShort);
+    d.f.classList.add('pk-stretching');
+    d.f.style.transformOrigin = (dx > 0 ? 'left' : 'right') + ' ' + (dy > 0 ? 'top' : 'bottom');
+    d.f.style.scale = (1 + Math.abs(sx) / d.f.offsetWidth).toFixed(4) + ' ' + (1 + Math.abs(sy) / d.f.offsetHeight).toFixed(4);
+    d.f.style.translate = (sx * 0.3).toFixed(2) + 'px ' + (sy * 0.3).toFixed(2) + 'px';
+  });
+  function endStretch(ev) {
+    const d = stretch;
+    if (!d || ev.pointerId !== d.id) return;
+    stretch = null;
+    d.f.classList.remove('pk-stretching');
+    d.f.style.removeProperty('scale');
+    d.f.style.removeProperty('translate');
+  }
+  doc.addEventListener('pointerup', endStretch);
+  doc.addEventListener('pointercancel', endStretch);
+
   /* ==PARTS== (each group below adds its part) */
 
   /* ============================================================================================================
@@ -837,6 +1065,18 @@
     layer,
     rel,
     refresh: refreshAll,
+    html: {
+      // the 8-spoke iOS spinner
+      spinner: () => {
+        let l = '';
+        for (let i = 0; i < 8; i++)
+          l += '<line x1="12" y1="3" x2="12" y2="7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity="' + (0.25 + i * 0.1).toFixed(2) + '" transform="rotate(' + i * 45 + ' 12 12)"/>';
+        return '<svg class="pk-spinner" viewBox="0 0 24 24" data-name="Spinner" aria-label="Loading">' + l + '</svg>';
+      },
+    },
+    setSwitch: (sw, on) => setSwitch(sw, !!on, true),
+    setSlider: (sl, v) => setSlider(sl, v, false),
+    setStepper: (st, v) => setStepper(st, v, true),
     select: (barEl, i) => selectBar(barEl, i, true),
     push,
     pop,

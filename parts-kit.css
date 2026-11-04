@@ -1,0 +1,464 @@
+/* Parts kit 1.0.0 · one set of Liquid Glass parts for any app or prototype.
+   MIT licence. Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
+   Load this file first, then your app's own stylesheet: any value below that your app also sets is yours.
+   Every corner, press, curve and duration the parts use is named in the defaults block; nothing below it writes its
+   own (tools/check.py fails if one does). */
+
+/* ===================================================================================================================
+   DEFAULTS · light. :where() keeps them at zero weight, so an app's own value of the same name always wins.
+   =================================================================================================================== */
+:where(:root, .pk-light) {
+  /* colours: Apple's base set */
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --fg: #000000;
+  --fg2: #6c6c72;
+  --fg3: #a3a3a8;
+  --sep: rgba(60, 60, 67, 0.16);
+  --fill: rgba(118, 118, 128, 0.12); /* also the solid input well (12%) */
+  --accent: #007aff;
+  --on-accent: #ffffff;
+  --danger: #ff3b30;
+  --good: #34c759;
+  --pk-orange: #ff9500;
+
+  /* glass: iOS 27 .regular, measured against a SwiftUI control on the same screen */
+  --glass: rgba(248, 248, 248, 0.53);
+  --glass-rt: rgba(248, 248, 248, 0.665); /* Reduce transparency: alpha × 0.5 + 0.4 */
+  --glass-blur: 14px;
+  --glass-sat: 210%;
+  --glass-float: 0 7px 12px rgba(0, 0, 0, 0.016); /* light mode only */
+  --glass-line: rgba(0, 0, 0, 0.31); /* the 0.5 pt hairline, page − 80 */
+  --glass-line-end: rgba(0, 0, 0, 0.062); /* where the light hits it */
+  --glass-rim:
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.2), inset 0 3px 3px rgba(255, 255, 255, 0.035),
+    inset 0 -1px 0.5px rgba(255, 255, 255, 0.13), inset 0 -3px 3px rgba(255, 255, 255, 0.023);
+  --glass-strong: rgba(250, 250, 252, 0.86); /* sheets */
+  --lift-max: rgba(255, 255, 255, 0.3); /* a pressed glass button lights up with this under its icon */
+  --tint: rgba(0, 122, 255, 0.82);
+  --pk-clear: rgba(255, 255, 255, 0.35); /* glass inside glass: a see-through fill with the rim, no second blur */
+  --pk-glint: rgba(255, 255, 255, 0.1);
+  --pk-rest: rgba(0, 0, 0, 0.1); /* the picked tab's flat fill */
+  --pk-lens: rgba(255, 255, 255, 0.08); /* the tab or segment highlight while pressed */
+  --pk-menu: rgba(245, 245, 247, 0.8);
+  --pk-menu-blur: 22px;
+  --pk-menu-line: rgba(0, 0, 0, 0.3);
+  --pk-menu-gap: rgba(0, 0, 0, 0.06);
+  --pk-popover: rgba(255, 255, 255, 0.12);
+  --pk-popover-blur: 10px;
+  --pk-sheet-blur: 10px;
+  --pk-dim: rgba(0, 0, 0, 0.54); /* behind sheets */
+  --pk-dim-light: rgba(0, 0, 0, 0.2); /* behind menus, alerts and action sheets */
+  --pk-grab: rgba(0, 0, 0, 0.2);
+  --pk-switch-off: rgba(120, 120, 128, 0.16);
+  --pk-knob: #ffffff;
+  --pk-row-press: #d1d1d6;
+  --pk-seg-knob: #ffffff;
+
+  /* corners */
+  --r-small: 10px; /* icon tiles, badges, small inner boxes */
+  --r-medium: 14px; /* fields, inner boxes, menu rows */
+  --r-card: 20px; /* cards, grouped lists, menus (D16) */
+  --r-large: 26px; /* big blocks, glass cards, popovers */
+  --r-sheet: 46px; /* sheets and covers: the screen's own corners (D17) */
+  --r-alert: 34px;
+  --r-actions: 28px; /* action sheet groups */
+
+  /* press */
+  --press: 0.93; /* solid buttons */
+  --press-row: 0.98; /* rows, when row.press is 'shrink' */
+
+  /* shadows: the named set of three */
+  --shadow-lifted: 0 8px 24px rgba(0, 0, 0, 0.18); /* a lifted card or row */
+  --shadow-floating: 0 8px 33px rgba(0, 0, 0, 0.08); /* menus, popovers, toasts */
+  --shadow-glow: 0 0 22px rgba(0, 122, 255, 0.35); /* a part calling attention to itself */
+
+  /* easings (fixed curves; the springs are --ease-gentle … published by the motion core) */
+  --ease-pop: cubic-bezier(0.3, 1.7, 0.45, 1); /* the solid press settle */
+  --ease-knob: cubic-bezier(0.3, 1.35, 0.5, 1); /* the squish knob's settle */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1); /* one settle without a bounce; fades */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* the switch */
+  --ease-decel: cubic-bezier(0.33, 1, 0.68, 1); /* arriving: toasts, action sheets, lifts */
+  --ease-accel: cubic-bezier(0.32, 0, 0.67, 0); /* leaving */
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1); /* the slider knob */
+  --ease-lift: cubic-bezier(0, 0, 0.58, 1); /* the press light coming up */
+  --ease-linear: linear;
+
+  /* durations (fixed; multiplied by the motion speed where used) */
+  --dur-quick: 120ms;
+  --dur-fade: 200ms;
+  --dur-lift-in: 150ms;
+  --dur-lift-out: 60ms;
+  --dur-switch: 380ms;
+  --dur-knob: 150ms;
+  --dur-squish: 450ms;
+  --dur-appear: 250ms;
+  --dur-leave: 350ms;
+  --dur-cover: 500ms;
+  --dur-toast-in: 500ms;
+  --dur-toast-out: 350ms;
+  --dur-close: 170ms; /* menus closing */
+  --dur-ramp: 260ms; /* a blur fading in */
+  --dur-lift-row: 360ms; /* a held row lifting */
+  --dur-recede: 320ms; /* a menu behind its submenu */
+  --dur-reduced: 100ms; /* Reduce Motion: the short fade that replaces movement */
+  --dur-glint: 500ms;
+  --dur-progress: 600ms;
+  --dur-spin: 1s;
+
+  /* spring stand-ins until the motion core publishes the real ones (--ease-<name>, --dur-<name>) */
+  --ease-gentle: var(--ease-out);
+  --ease-nav: var(--ease-out);
+  --ease-ripple: var(--ease-out);
+  --ease-press: var(--ease-out);
+  --ease-release: var(--ease-out);
+  --ease-snap: var(--ease-out);
+  --ease-bloom: var(--ease-out);
+  --ease-settle: var(--ease-out);
+  --ease-pill: var(--ease-out);
+  --ease-sheet: var(--ease-out);
+  --ease-menu-open: var(--ease-out);
+  --ease-menu-close: var(--ease-out);
+  --dur-gentle: 0ms;
+  --dur-nav: 0ms;
+  --dur-ripple: 0ms;
+  --dur-press: 0ms;
+  --dur-release: 0ms;
+  --dur-snap: 0ms;
+  --dur-bloom: 0ms;
+  --dur-settle: 0ms;
+  --dur-pill: 0ms;
+  --dur-sheet: 0ms;
+  --dur-menu-open: 0ms;
+  --dur-menu-close: 0ms;
+
+  /* layout */
+  --dockb: 21px;
+  --dockl: 21px;
+  --dockr: 21px;
+  --pk-search-gap: 8px; /* tabBar.searchGap (D02) */
+  --pk-speed: 1; /* the motion speed: 1 normal, 4 slow, 0 off (set by parts-kit.js) */
+}
+
+/* DEFAULTS · dark, from the iPhone's setting. The same block again for .pk-dark (a forced look); tools/check.py
+   checks the two stay identical. */
+@media (prefers-color-scheme: dark) {
+  :where(:root:not(.pk-light)) {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --fg: #ffffff;
+    --fg2: #98989f;
+    --fg3: #5c5c61;
+    --sep: rgba(84, 84, 88, 0.5);
+    --fill: rgba(118, 118, 128, 0.24);
+    --accent: #0a84ff;
+    --danger: #ff453a;
+    --good: #30d158;
+    --pk-orange: #ff9f0a;
+    --glass: rgba(255, 255, 255, 0.12);
+    --glass-rt: rgba(255, 255, 255, 0.46);
+    --glass-sat: 140%;
+    --glass-float: 0 0 0 transparent;
+    --glass-line-end: transparent;
+    --glass-rim:
+      inset 0 -1px 0.5px rgba(255, 255, 255, 0.23), inset 0 -3px 3px rgba(255, 255, 255, 0.04),
+      inset 0 1px 0.5px rgba(255, 255, 255, 0.2), inset 0 3px 3px rgba(255, 255, 255, 0.035);
+    --glass-strong: rgba(44, 44, 48, 0.86);
+    --lift-max: rgba(255, 255, 255, 0.14);
+    --tint: rgba(10, 132, 255, 0.78);
+    --pk-clear: rgba(255, 255, 255, 0.1);
+    --pk-glint: rgba(255, 255, 255, 0.07);
+    --pk-rest: rgba(255, 255, 255, 0.1);
+    --pk-lens: rgba(255, 255, 255, 0.08);
+    --pk-menu: rgba(37, 37, 40, 0.8);
+    --pk-menu-line: rgba(255, 255, 255, 0.2);
+    --pk-menu-gap: rgba(0, 0, 0, 0.25);
+    --pk-dim-light: rgba(0, 0, 0, 0.25);
+    --pk-grab: rgba(255, 255, 255, 0.35);
+    --pk-switch-off: rgba(120, 120, 128, 0.32);
+    --pk-row-press: #3a3a3c;
+    --pk-seg-knob: #636366;
+    --shadow-glow: 0 0 22px rgba(10, 132, 255, 0.45);
+  }
+}
+:where(.pk-dark) {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --fg: #ffffff;
+    --fg2: #98989f;
+    --fg3: #5c5c61;
+    --sep: rgba(84, 84, 88, 0.5);
+    --fill: rgba(118, 118, 128, 0.24);
+    --accent: #0a84ff;
+    --danger: #ff453a;
+    --good: #30d158;
+    --pk-orange: #ff9f0a;
+    --glass: rgba(255, 255, 255, 0.12);
+    --glass-rt: rgba(255, 255, 255, 0.46);
+    --glass-sat: 140%;
+    --glass-float: 0 0 0 transparent;
+    --glass-line-end: transparent;
+    --glass-rim:
+      inset 0 -1px 0.5px rgba(255, 255, 255, 0.23), inset 0 -3px 3px rgba(255, 255, 255, 0.04),
+      inset 0 1px 0.5px rgba(255, 255, 255, 0.2), inset 0 3px 3px rgba(255, 255, 255, 0.035);
+    --glass-strong: rgba(44, 44, 48, 0.86);
+    --lift-max: rgba(255, 255, 255, 0.14);
+    --tint: rgba(10, 132, 255, 0.78);
+    --pk-clear: rgba(255, 255, 255, 0.1);
+    --pk-glint: rgba(255, 255, 255, 0.07);
+    --pk-rest: rgba(255, 255, 255, 0.1);
+    --pk-lens: rgba(255, 255, 255, 0.08);
+    --pk-menu: rgba(37, 37, 40, 0.8);
+    --pk-menu-line: rgba(255, 255, 255, 0.2);
+    --pk-menu-gap: rgba(0, 0, 0, 0.25);
+    --pk-dim-light: rgba(0, 0, 0, 0.25);
+    --pk-grab: rgba(255, 255, 255, 0.35);
+    --pk-switch-off: rgba(120, 120, 128, 0.32);
+    --pk-row-press: #3a3a3c;
+    --pk-seg-knob: #636366;
+    --shadow-glow: 0 0 22px rgba(10, 132, 255, 0.45);
+}
+:where(.pk-dark) {
+  color-scheme: dark;
+}
+:where(.pk-light) {
+  color-scheme: light;
+}
+/* END OF DEFAULTS */
+
+/* blur ramps need a registered property; where it's missing the blur simply starts full */
+@property --pk-ramp {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* ===================================================================================================================
+   FOUNDATIONS
+   =================================================================================================================== */
+:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button) {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+:where([class^='pk-'], [class*=' pk-']) {
+  box-sizing: border-box;
+}
+:where([class^='pk-'], [class*=' pk-']) svg {
+  display: block;
+  flex: none;
+}
+
+/* (1) the glass material. Glass goes on the control layer only (bars, buttons, sheets, toasts); lists stay solid */
+.pk-glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  box-shadow: var(--glass-rim), var(--glass-float);
+  isolation: isolate;
+}
+:where(.pk-glass, .pk-clear) {
+  position: relative;
+}
+/* the hairline: 0.5 pt, darkest across the light's direction and fading where the light hits */
+.pk-glass::before,
+.pk-clear::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.5px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(var(--glass-line-end), var(--glass-line) 30%, var(--glass-line) 70%, var(--glass-line-end));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.pk-glass.pk-strong {
+  background: var(--glass-strong);
+}
+.pk-glass.pk-tinted,
+.pk-clear.pk-tinted {
+  background: var(--tint);
+  color: var(--on-accent);
+}
+.pk-clear {
+  background: var(--pk-clear);
+  box-shadow: var(--glass-rim);
+  isolation: isolate;
+}
+/* Reduce transparency: the tint more solid, the blur kept (html.glass-solid, or any ancestor with it) */
+.glass-solid .pk-glass:not(.pk-strong, .pk-tinted) {
+  background: var(--glass-rt);
+}
+
+/* the press. parts-kit.js measures the button and sets --pk-ps:
+   .pk-press grows by 17 pt along its longest side and lights up (glass buttons);
+   .pk-press-bar only lights up (buttons on a glass bar);
+   .pk-press-solid shrinks to --press (solid buttons) */
+.pk-press,
+.pk-press-bar,
+.pk-press-solid {
+  scale: var(--pk-ps, 1);
+  translate: var(--pk-tx, 0px) var(--pk-ty, 0px);
+  transition: scale var(--dur-release) var(--ease-release), translate var(--dur-release) var(--ease-release);
+}
+:where(.pk-press, .pk-press-bar, .pk-press-solid) {
+  position: relative;
+  isolation: isolate;
+}
+.pk-press.pk-pressed,
+.pk-press-bar.pk-pressed {
+  z-index: 20;
+  transition: scale var(--dur-press) var(--ease-press), translate var(--dur-press) var(--ease-press);
+}
+.pk-press-solid.pk-pressed {
+  --pk-ps: var(--press);
+  transition: scale calc(var(--dur-quick) * var(--pk-speed)) var(--ease-pop);
+}
+.pk-press::after,
+.pk-press-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--lift-max);
+  opacity: 0;
+  transition: opacity calc(var(--dur-lift-out) * var(--pk-speed)) var(--ease-linear);
+}
+.pk-pressed::after {
+  opacity: 1;
+  transition: opacity calc(var(--dur-lift-in) * var(--pk-speed)) var(--ease-lift);
+}
+.pk-press-solid::after {
+  content: none;
+}
+.motion-reduced :is(.pk-press, .pk-press-bar, .pk-press-solid) {
+  scale: none;
+  translate: none;
+}
+/* (52, pinned) the finger glint: a soft glow under the finger, on buttons named in press.glint */
+.pk-glint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(closest-side, var(--pk-glint), transparent);
+  filter: blur(8px);
+  mix-blend-mode: plus-lighter;
+  opacity: 0;
+  transition: opacity calc(var(--dur-glint) * var(--pk-speed)) var(--ease-out);
+}
+.pk-pressed > .pk-glint {
+  opacity: 1;
+  transition: opacity calc(var(--dur-lift-in) * var(--pk-speed)) var(--ease-out);
+}
+.pk-glint-clip {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* the shared shapes */
+.pk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--fg);
+  flex: none;
+}
+.pk-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+.pk-circle.pk-sm {
+  width: 36px;
+  height: 36px;
+}
+.pk-circle.pk-lg {
+  width: 56px;
+  height: 56px;
+}
+.pk-pill {
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.pk-cta {
+  height: 50px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 17px;
+}
+.pk-cta.pk-wide {
+  width: 100%;
+}
+.pk-btn.pk-tinted {
+  color: var(--on-accent);
+}
+.pk-btn.pk-solid {
+  background: var(--fg);
+  color: var(--bg);
+}
+.pk-btn.pk-text {
+  color: var(--accent);
+  font-size: 17px;
+  height: 34px;
+  padding: 0 4px;
+}
+.pk-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* layers for overlays: parts-kit.js puts one inside the root (the page, or the app's own root) */
+.pk-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+body > .pk-layer {
+  position: fixed;
+}
+.pk-layer > * {
+  pointer-events: auto;
+}
+.pk-dim {
+  position: absolute;
+  inset: 0;
+  background: var(--pk-dim);
+  opacity: 0;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-dim.pk-soft {
+  background: var(--pk-dim-light);
+}
+.pk-dim.pk-clear-dim {
+  background: transparent;
+}
+.pk-dim.pk-on {
+  opacity: 1;
+}

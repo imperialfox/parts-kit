@@ -570,6 +570,49 @@ def overlays(page):
     ok(shown and still == 1 and after3 == 0, f"49: the toast drops in, stays 3 s, then leaves ({shown}, {still}, {after3})")
 
 
+@behaviour
+def pinned(page):
+    page.evaluate("Parts.motion.setSpeed(1)")
+    # 45 submenus (D11): on for this menu in the gallery
+    scroll_to(page, "#p45"); page.click("#o-sub"); page.wait_for_timeout(300)
+    page.click(".pk-menu .pk-menu-item >> nth=0"); page.wait_for_timeout(400)
+    r = page.evaluate("({ sub: !!document.querySelector('.pk-submenu.pk-on'), recede: getComputedStyle(document.querySelector('.pk-menu.pk-recede') || document.body).scale })")
+    ok(r["sub"] and r["recede"] == "0.971", f"45/D11: a submenu opens over its menu, which recedes to 0.971 ({r})")
+    page.click(".pk-submenu .pk-menu-item >> nth=3"); page.wait_for_timeout(450)
+    ok(page.evaluate("!document.querySelector('.pk-menu') && document.querySelector('.pk-toast').textContent.includes('Sort by: Size')"), "45: picking in the submenu closes both and returns the item")
+    # 50 glass appearing and leaving (D12)
+    scroll_to(page, "#p50"); page.click("#mzBtn"); page.wait_for_timeout(60)
+    anim = page.evaluate("(() => { const g = document.querySelector('#mzslot .pk-btn'); return g ? g.getAnimations().length : -1; })()")
+    page.wait_for_timeout(450)
+    gone1 = page.evaluate("document.querySelectorAll('#mzslot .pk-btn').length")
+    page.click("#mzBtn"); page.wait_for_timeout(60)
+    anim2 = page.evaluate("document.querySelector('#mzslot .pk-btn').getAnimations().length")
+    ok(anim > 0 and gone1 == 0 and anim2 > 0, f"50/D12: named glass leaves and appears with its animation ({anim}, {gone1}, {anim2})")
+    # 52 finger glint and drag (D13)
+    scroll_to(page, "#p52"); page.wait_for_timeout(400)
+    x, y = center(page, "#pad")
+    page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(200); page.mouse.move(x + 40, y + 10); page.wait_for_timeout(200)
+    r = page.evaluate("(() => { const p = document.querySelector('#pad'), g = p.querySelector('.pk-glint'); return { g: g ? getComputedStyle(g).opacity : null, tx: parseFloat(p.style.getPropertyValue('--pk-tx')) || 0 }; })()")
+    page.mouse.up()
+    ok(r["g"] == "1" and 0 < r["tx"] <= 4, f"52/D13: a glint follows the finger and the button leans a few points ({r})")
+    # all three off: submenus inline, appearing at once, no glint
+    page.evaluate("Kit.set('Pinned parts (D11–D13)', 1)"); page.wait_for_timeout(500)
+    scroll_to(page, "#p45"); page.click("#o-sub"); page.wait_for_timeout(300)
+    r = page.evaluate("({ labels: document.querySelectorAll('.pk-menu .pk-menu-label').length, items: document.querySelectorAll('.pk-menu .pk-menu-item').length })")
+    page.evaluate("Parts.closeAll()"); page.wait_for_timeout(400)
+    ok(r == {"labels": 2, "items": 7}, f"D11 off: submenu items show inline under their labels ({r})")
+    scroll_to(page, "#p50"); page.click("#mzBtn"); page.wait_for_timeout(40)
+    off_gone = page.evaluate("document.querySelectorAll('#mzslot .pk-btn').length")
+    page.click("#mzBtn"); page.wait_for_timeout(40)
+    off_anim = page.evaluate("document.querySelector('#mzslot .pk-btn').getAnimations().filter(a => a.playState === 'running').length")
+    ok(off_gone == 0 and off_anim == 0, f"D12 off: glass appears and leaves at once ({off_gone}, {off_anim})")
+    scroll_to(page, "#p52"); x, y = center(page, "#pad")
+    page.mouse.move(x, y); page.mouse.down(); page.mouse.move(x + 40, y + 10); page.wait_for_timeout(100)
+    r = page.evaluate("(() => { const p = document.querySelector('#pad'), g = p.querySelector('.pk-glint'); return { g: g ? getComputedStyle(g).opacity : '0', tx: p.style.getPropertyValue('--pk-tx') }; })()")
+    page.mouse.up()
+    ok(r["g"] == "0" and r["tx"] == "", f"D13 off: no glint and no lean ({r})")
+
+
 def main():
     shots = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else KIT / "shots").resolve()
     shots.mkdir(parents=True, exist_ok=True)

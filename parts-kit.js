@@ -408,6 +408,7 @@
     }
     const glint = el.classList.contains('pk-press') && allowed(S.press.glint, el.dataset.glint);
     if (glint) placeGlint(el, ev);
+    el.classList.toggle('pk-glinting', glint);
     el.classList.add('pk-pressed');
     pressed = { el, x: ev.clientX, y: ev.clientY, id: ev.pointerId, glint };
   });

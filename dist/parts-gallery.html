@@ -543,7 +543,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   opacity: 0;
   transition: opacity calc(var(--dur-glint) * var(--pk-speed)) var(--ease-out);
 }
-.pk-pressed > .pk-glint {
+.pk-pressed.pk-glinting > .pk-glint-clip > .pk-glint {
   opacity: 1;
   transition: opacity calc(var(--dur-lift-in) * var(--pk-speed)) var(--ease-out);
 }
@@ -2141,6 +2141,9 @@ body > .pk-layer {
 #app .pk-ico{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 #app .gal-sq{width:44px;height:44px;border-radius:12px}
 #app .gal-pill132{width:132px;padding:0}
+#app .gal-pad{width:220px;height:72px;border-radius:999px;font-weight:600;touch-action:none}
+#app .gal-mz{width:64px;height:64px}
+#app .gal-mzslot{width:64px;height:64px}
 </style>
 </head>
 <body>
@@ -4059,6 +4062,7 @@ body > .pk-layer {
     }
     const glint = el.classList.contains('pk-press') && allowed(S.press.glint, el.dataset.glint);
     if (glint) placeGlint(el, ev);
+    el.classList.toggle('pk-glinting', glint);
     el.classList.add('pk-pressed');
     pressed = { el, x: ev.clientX, y: ev.clientY, id: ev.pointerId, glint };
   });
@@ -5708,6 +5712,15 @@ H += part(48, 'Alert', 'e', 'A centred box with two capsule buttons. Appears ove
 H += part(49, 'Toast', 'e', 'Drops in from the top over 500 ms, stays 3 s (<code>timing.toast</code>), then leaves upward over 350 ms. Undo where something can be undone. <code>Parts.toast(text, {undo})</code>',
   `<div class="gal-row">${openBtn('o-toast', 'Show toast')}</div>`);
 
+
+H += sec('effects', 'Effects');
+H += part(45, 'Menu with submenu', 'pin', 'Tap "Sort by". The submenu opens over its parent; the parent shrinks to 0.971 and its rows fade to half (measured). Pinned (D11): only menus named in <code>menu.submenus</code> open submenus; elsewhere the same items show inline under a small label (switch Pinned parts off to see).',
+  stage(`<button class="pk-btn pk-pill pk-glass pk-press" id="o-sub" data-name="Button: Options">Options ${ic('chevD', 18)}</button>`));
+H += part(50, 'Glass appearing and leaving', 'pin', 'Appearing: 250 ms, scaling 1.15 → 1, glass full at 92%, icon sharpening from an 8 px blur over the last 65%. Leaving: 350 ms, icon gone by 55%, then the empty glass fades. Pinned (D12): only parts named in <code>glass.appear</code>; elsewhere they appear at once. <code>Parts.appear(el, {key})</code> <code>Parts.leave(el, {key})</code>',
+  stage(`<div class="gal-mzslot" id="mzslot" data-name="Slot"><button class="pk-btn pk-circle gal-mz pk-glass pk-press" data-name="Appearing glass" aria-label="Star">${ic('star', 26)}</button></div><button class="pk-btn pk-pill pk-glass pk-press" id="mzBtn" data-name="Button: Hide">Hide</button>`, 'tall'));
+H += part(52, 'Finger glint and drag', 'pin', 'Press and drag. A soft glow follows the finger (10% light, 7% dark, 1.6 × the short side; by eye). Dragged, the button leans toward the finger by a few points with no bounce back (measured). Pinned (D13): only buttons whose <code>data-glint</code> is named in <code>press.glint</code>.',
+  stage(`<button class="pk-btn gal-pad pk-glass pk-press" id="pad" data-glint="pad" data-name="Glint pad">Press and drag</button>`, 'tall'));
+
 /* ==SECTIONS== */
 
 H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in 1.0: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
@@ -5770,6 +5783,15 @@ $('#ctxList').addEventListener('pk:hold', e => e.detail.open([{ label: 'Copy', i
 $('#o-as').addEventListener('click', () => Parts.choices({ title: 'What would you like to do with “Weekly plan”?', actions: [{ label: 'Duplicate' }, { label: 'Move to folder' }, { label: 'Delete', red: true }] }).then(v => { if (v) Parts.toast(v === 'Delete' ? 'Deleted “Weekly plan”' : v, v === 'Delete' ? { undo: () => Parts.toast('Undone') } : null); }));
 $('#o-dlg').addEventListener('click', () => Parts.confirm({ title: 'Delete “Weekly plan”?', message: "This can't be undone.", action: 'Delete' }).then(yes => { if (yes) Parts.toast('Deleted “Weekly plan”'); }));
 $('#o-toast').addEventListener('click', () => Parts.toast('Saved to Library', { undo: () => Parts.toast('Undone') }));
+
+
+/* ---------- demos: effects ---------- */
+$('#o-sub').addEventListener('click', () => Parts.menu($('#o-sub'), [{ label: 'Sort by', sub: [{ label: 'Name', icon: ic('check', 18) }, { label: 'Date added' }, { label: 'Size' }] }, { label: 'View as', sub: [{ label: 'List', icon: ic('check', 18) }, { label: 'Grid' }] }, { label: 'Select', icon: ic('check', 18) }, '-', { label: 'Delete', icon: ic('trash', 18), red: true }],
+  { key: 'options', name: 'Options menu', onPick: it => Parts.toast((it.parent ? it.parent + ': ' : '') + it.label) }));
+(() => { const slot = $('#mzslot'), btn = $('#mzBtn'); let shown = true;
+  btn.addEventListener('click', () => {
+    if (shown) { shown = false; btn.textContent = 'Show'; const g = slot.firstElementChild; if (g) Parts.leave(g, { key: 'star' }); }
+    else { shown = true; btn.textContent = 'Hide'; slot.innerHTML = `<button class="pk-btn pk-circle gal-mz pk-glass pk-press" data-name="Appearing glass" aria-label="Star">${ic('star', 26)}</button>`; Parts.appear(slot.firstElementChild, { key: 'star' }); } }); })();
 
 /* ==BEHAVIOUR== */
 

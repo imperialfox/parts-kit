@@ -375,7 +375,7 @@
   opacity: 0;
   transition: opacity calc(var(--dur-glint) * var(--pk-speed)) var(--ease-out);
 }
-.pk-pressed > .pk-glint {
+.pk-pressed.pk-glinting > .pk-glint-clip > .pk-glint {
   opacity: 1;
   transition: opacity calc(var(--dur-lift-in) * var(--pk-speed)) var(--ease-out);
 }

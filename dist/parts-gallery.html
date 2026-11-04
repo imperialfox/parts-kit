@@ -166,7 +166,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
 
 </style>
 <style id="pk-css">
-/* Parts kit 1.1.0 · one set of Liquid Glass parts for any app or prototype.
+/* Parts kit 1.2.0 · one set of Liquid Glass parts for any app or prototype.
    MIT licence. Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
    Load this file first, then your app's own stylesheet: any value below that your app also sets is yours.
    Every corner, press, curve and duration the parts use is named in the defaults block; nothing below it writes its
@@ -315,6 +315,8 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   --dockl: 21px;
   --dockr: 21px;
   --pk-search-gap: 8px; /* tabBar.searchGap (D02) */
+  --pk-kb-gap: 8px; /* (6) how far the searching dock sits above the iPhone keyboard */
+  --pk-kb: 0px; /* (6) how far the keyboard has lifted the searching dock (set by parts-kit.js) */
   --pk-bar-top: 54px; /* where the top bar's buttons sit (below the status bar) */
   --pk-speed: 1; /* the motion speed: 1 normal, 4 slow, 0 off (set by parts-kit.js) */
 }
@@ -951,6 +953,11 @@ body > .pk-layer {
   opacity: 0;
   scale: 0.8;
   pointer-events: none;
+}
+/* (6) the keyboard: while searching, the dock rides --pk-kb-gap above the iPhone keyboard. parts-kit.js sets the
+   lift from the visible area as the keyboard moves, so there is no transition here. */
+.pk-dock.pk-kb {
+  translate: 0 calc(var(--pk-kb-lift) * -1);
 }
 
 /* (10) a pushed page slides in from the right while the page underneath moves a third left and dims */
@@ -3656,7 +3663,7 @@ body > .pk-layer {
 
 </script>
 <script id="pk-js">
-/* Parts kit 1.1.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
+/* Parts kit 1.2.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
    Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
 
    Use: load parts-kit.css and this file, then your settings file:  Parts.settings({ app: 'My app', … })
@@ -3669,7 +3676,7 @@ body > .pk-layer {
 (function () {
   'use strict';
   if (window.Parts && window.Parts.version) return;
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const doc = document;
   const html = doc.documentElement;
 
@@ -4498,6 +4505,7 @@ body > .pk-layer {
     if (t.classList.contains('pk-tab-pill')) return dock.classList.remove('pk-folded');
     const on = t.classList.contains('pk-search-circle');
     dock.classList.toggle('pk-searching', on);
+    if (on) kbFollow(dock);
     const inp = dock.querySelector('.pk-search-field input');
     if (inp) {
       if (on) setTimeout(() => inp.focus({ preventScroll: true }), 60);
@@ -4507,8 +4515,83 @@ body > .pk-layer {
         inp.blur();
       }
     }
+    kbWatch();
     emit(dock, 'search', { open: on });
   });
+
+  /* (6) the keyboard: while a dock is searching, it rides --pk-kb-gap (8 pt) above the iPhone keyboard, so the field
+     and what's typed stay in view. It follows the visible area (visualViewport) as the keyboard moves: no spring of
+     its own, so Reduce Motion and speed 0 change nothing. The lift is published as --pk-kb on <html>, so an app can
+     give its list that much more room at the bottom. After ✕ the dock stays lifted until the keyboard has gone, so it
+     comes down with it. Pinch zoom (scale ≠ 1) is not a keyboard and lifts nothing. */
+  let kbDock = null,
+    kbLift = 0,
+    kbUntil = 0;
+  function kbSet(lift) {
+    if (lift === kbLift) return;
+    kbLift = lift;
+    if (kbDock) {
+      kbDock.classList.toggle('pk-kb', lift > 0);
+      kbDock.style.setProperty('--pk-kb-lift', lift + 'px');
+    }
+    html.style.setProperty('--pk-kb', lift + 'px');
+    if (kbDock) emit(kbDock, 'keyboard', { lift });
+  }
+  function kbFollow(dock) {
+    if (kbDock && kbDock !== dock) {
+      kbSet(0);
+      kbDock.classList.remove('pk-kb');
+      kbDock.style.removeProperty('--pk-kb-lift');
+    }
+    kbDock = dock;
+  }
+  function keyboard() {
+    const dock = kbDock;
+    if (!dock) return 0;
+    const vv = window.visualViewport;
+    let lift = 0;
+    if (dock.isConnected && vv && Math.abs((vv.scale || 1) - 1) < 0.01) {
+      const top = vv.offsetTop + vv.height; // the keyboard's top edge, in page coordinates
+      if (html.clientHeight - top > 1) {
+        const rest = dock.getBoundingClientRect().bottom + kbLift; // where the dock sits with no lift
+        const gap = parseFloat(getComputedStyle(dock).getPropertyValue('--pk-kb-gap')) || 0;
+        lift = Math.max(0, Math.round(rest + gap - top));
+      }
+    }
+    kbSet(lift);
+    if (!lift && !dock.classList.contains('pk-searching')) {
+      dock.classList.remove('pk-kb');
+      dock.style.removeProperty('--pk-kb-lift');
+      kbDock = null;
+    }
+    return lift;
+  }
+  // iOS can report the visible area in steps while the keyboard moves: read it every frame for a moment after
+  // anything that opens or closes the keyboard, as well as on every visualViewport event
+  function kbWatch() {
+    if (!kbDock) return;
+    const was = kbUntil;
+    kbUntil = performance.now() + 700;
+    if (was > performance.now()) return;
+    const tick = () => {
+      keyboard();
+      if (kbDock && performance.now() < kbUntil) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', keyboard);
+    window.visualViewport.addEventListener('scroll', keyboard);
+  }
+  window.addEventListener('resize', keyboard);
+  doc.addEventListener('focusin', (ev) => {
+    const d = ev.target.closest && ev.target.closest('.pk-dock.pk-searching');
+    if (d) {
+      kbFollow(d);
+      kbWatch();
+    }
+  });
+  doc.addEventListener('focusout', () => kbWatch());
 
   /* (10) pushed page: Parts.push(page, {under}) slides it in; swipe right from anywhere on it, or Parts.pop(page) */
   const navDims = new WeakMap();
@@ -5750,6 +5833,7 @@ body > .pk-layer {
     rel,
     refresh: refreshAll,
     differences,
+    keyboard,
     sheet,
     cover,
     menu,
@@ -5859,7 +5943,7 @@ H += part(4, 'Tab bar', 'e', '64 pt capsule. The picked tab sits on a flat 10% f
   stage(`<div class="pk-dock pk-inline" data-name="Dock">${tabsHTML([['home', 'Home'], ['grid', 'Browse'], ['book', 'Library'], ['person', 'Profile']])}</div>`));
 H += part(5, 'Tab bar, folded away', 'e', 'Off by default (decision D01: never folds). With <code>tabBar.fold</code> on, the bar folds into a 50 pt pill after 20 pt of scrolling down and opens after 12 pt up (switch it on in the controls, then scroll this page). Here: tap Fold, then the pill.',
   stage(`<div class="gal-col"><div class="pk-dock pk-inline" id="foldDemo" data-name="Dock">${tabsHTML([['home', 'Home'], ['grid', 'Browse'], ['book', 'Library']])}<button class="pk-btn pk-tab-pill pk-glass pk-press" data-name="Folded pill" aria-label="Open the tab bar">${ic('home')}</button></div><button class="pk-btn pk-pill pk-glass pk-press" id="foldBtn" data-name="Button: Fold">Fold</button></div>`, 'tall'));
-H += part(6, 'Tab bar with search', 'e', 'A search circle 8 pt from the bar (<code>tabBar.searchGap</code>, D02). It opens into a 50 pt search field on a 336 ms spring; ✕ closes it.',
+H += part(6, 'Tab bar with search', 'e', 'A search circle 8 pt from the bar (<code>tabBar.searchGap</code>, D02). It opens into a 50 pt search field on a 336 ms spring; ✕ closes it. On an iPhone the open field rides 8 pt above the keyboard and comes back down with it (<code>--pk-kb-gap</code>); the lift is <code>--pk-kb</code>, for the list behind it.',
   stage(`<div class="pk-dock pk-inline" data-name="Dock">${tabsHTML([['home', 'Home'], ['grid', 'Browse'], ['book', 'Library']])}${searchHTML('Search')}</div>`));
 H += part(10, 'Pushed page', 'e', 'Slides in from the right while the page underneath moves a third left and dims. Swipe back from anywhere on it. <code>Parts.push(page)</code> <code>Parts.pop(page)</code>',
   `<div class="pk-list">${row('Open a pushed page', '', null, chev, 'button').replace('data-name', 'id="pushOpen" data-name')}</div>`);

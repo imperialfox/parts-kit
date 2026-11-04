@@ -11,6 +11,8 @@ Usage: python tools/check.py [shots-folder]        (needs Python and Playwright:
    2b. Differences (1.1): a spring override changes only its spring, in the CSS and the code; one element's timing or
    spring changes only that element; Parts.differences() lists exactly what changed; nothing moves under Reduce
    Motion or at speed 0; bad overrides are refused and left as they were; opening a sheet and a menu stays quick.
+   Keyboard (1.2): with a faked smaller visible area, an open search field rides --pk-kb-gap above the keyboard and
+   drops back when it grows (in 4, keyboard_lift).
 4. Every behaviour, and every setting both ways (BEHAVIOURS below).
 Prints each problem and exits 1 if there are any.
 """
@@ -407,6 +409,98 @@ def bars_and_buttons(page):
     scroll_to(page, "#p18")
     page.click("#p18 .pk-chip:nth-of-type(1)")
     ok(page.evaluate("document.querySelector('#p18 .pk-chip').classList.contains('on')"), "18: a chip picks")
+
+
+KB_FAKE = """window.__kb = (h, top = 0, scale = 1) => {
+  // a stand-in visible area: the keyboard covers whatever is below top + h
+  Object.defineProperty(window, 'visualViewport', { configurable: true, value: { width: innerWidth, height: h, offsetTop: top, offsetLeft: 0, scale, addEventListener() {}, removeEventListener() {} } });
+  window.dispatchEvent(new Event('resize'));
+};
+true"""
+
+
+@behaviour
+def keyboard_lift(page):
+    """1.2: an open search field rides --pk-kb-gap above a faked keyboard, and drops back when it goes."""
+    page.evaluate(KB_FAKE)
+    H = page.evaluate("document.documentElement.clientHeight")
+    KB = 336  # an iPhone's keyboard with its suggestion bar, upright
+    st = lambda sel: page.evaluate(f"""(() => {{ const d = document.querySelector('{sel}'), r = d.getBoundingClientRect();
+      return {{ bottom: r.bottom, kb: getComputedStyle(document.documentElement).getPropertyValue('--pk-kb').trim(), cls: d.classList.contains('pk-kb'), searching: d.classList.contains('pk-searching') }}; }})()""")
+    frame = lambda: page.evaluate("new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    # the screen's own dock: open search, no keyboard yet → nothing moves
+    rest = st("#dock")["bottom"]
+    page.click("#dock .pk-search-circle")
+    page.wait_for_timeout(120)
+    s = st("#dock")
+    ok(s["searching"] and abs(s["bottom"] - rest) < 0.5 and s["kb"] == "0px" and not s["cls"], f"6 keyboard: opening search with no keyboard moves nothing ({s})")
+    ok(page.evaluate("document.activeElement && document.activeElement.id") == "findIn", "6 keyboard: opening search focuses the field")
+    for mode, setup in (("normal", "Parts.motion.setSpeed(1)"), ("speed 0", "Parts.motion.setSpeed(0)"), ("Reduce Motion", "Parts.motion.setSpeed(1); Kit.set('Motion', 2)")):
+        page.evaluate(setup)
+        # the keyboard comes up: the dock's bottom sits 8 pt above it, at once (no curve of its own)
+        page.evaluate(f"__kb({H - KB})")
+        s = st("#dock")
+        want = H - KB - 8
+        lift = round(rest - want)
+        ok(abs(s["bottom"] - want) < 0.6 and s["kb"] == f"{lift}px" and s["cls"], f"6 keyboard ({mode}): the dock rides 8 pt above the keyboard, --pk-kb {lift}px ({s}, want bottom {want})")
+        # iOS panning the visible area down: the same keyboard top, the same lift
+        page.evaluate(f"__kb({H - KB - 120}, 120)")
+        s = st("#dock")
+        ok(abs(s["bottom"] - want) < 0.6, f"6 keyboard ({mode}): a panned visible area gives the same place ({s})")
+        # a smaller keyboard (no suggestion bar) moves it with it
+        page.evaluate(f"__kb({H - 291})")
+        s = st("#dock")
+        ok(abs(s["bottom"] - (H - 291 - 8)) < 0.6, f"6 keyboard ({mode}): it follows the keyboard's height ({s})")
+        # the keyboard goes: back where it was, --pk-kb 0, still searching
+        page.evaluate(f"__kb({H})")
+        s = st("#dock")
+        ok(abs(s["bottom"] - rest) < 0.5 and s["kb"] == "0px" and not s["cls"] and s["searching"], f"6 keyboard ({mode}): closing the keyboard brings it back down, search still open ({s})")
+    page.evaluate("Kit.set('Motion', 0); Parts.motion.setSpeed(1)")
+    # the gap is a named value an app can change
+    page.evaluate("document.documentElement.style.setProperty('--pk-kb-gap', '20px')")
+    page.evaluate(f"__kb({H - KB})")
+    s = st("#dock")
+    ok(abs(s["bottom"] - (H - KB - 20)) < 0.6, f"6 keyboard: --pk-kb-gap 20px gives a 20 pt gap ({s})")
+    page.evaluate("document.documentElement.style.removeProperty('--pk-kb-gap')")
+    page.evaluate(f"__kb({H - KB})")
+    # pinch zoom is not a keyboard
+    page.evaluate(f"__kb({H / 2}, 0, 2)")
+    s = st("#dock")
+    ok(abs(s["bottom"] - rest) < 0.5 and s["kb"] == "0px", f"6 keyboard: pinch zoom lifts nothing ({s})")
+    # ✕ with the keyboard still up: search closes, the dock stays up until the keyboard has gone, then comes down
+    page.evaluate(f"__kb({H - KB})")
+    page.click("#dock .pk-search-close")
+    frame()
+    s = st("#dock")
+    ok(not s["searching"] and abs(s["bottom"] - (H - KB - 8)) < 0.6, f"6 keyboard: after ✕ the dock waits for the keyboard ({s})")
+    page.evaluate(f"__kb({H})")
+    s = st("#dock")
+    ok(abs(s["bottom"] - rest) < 0.5 and s["kb"] == "0px" and not s["cls"], f"6 keyboard: … and comes down with it ({s})")
+    # no keyboard on a computer: ✕ brings everything straight back
+    page.click("#dock .pk-search-circle")
+    page.wait_for_timeout(100)
+    page.click("#dock .pk-search-close")
+    page.wait_for_timeout(100)
+    s = st("#dock")
+    ok(abs(s["bottom"] - rest) < 0.5 and s["kb"] == "0px" and not s["cls"], f"6 keyboard: with no keyboard ✕ leaves nothing lifted ({s})")
+    # part 6's own dock, in the page: opening it doesn't scroll the page; above the keyboard it stays put
+    scroll_to(page, "#p6")
+    y0 = page.evaluate("document.querySelector('#pg').scrollTop")
+    b0 = st("#p6 .pk-dock")["bottom"]
+    page.click("#p6 .pk-search-circle")
+    page.wait_for_timeout(150)
+    ok(abs(page.evaluate("document.querySelector('#pg').scrollTop") - y0) < 1, "6 keyboard: opening the field doesn't scroll the page")
+    top = b0 + 60  # a keyboard whose top is below the dock
+    page.evaluate(f"__kb({top})")
+    s = st("#p6 .pk-dock")
+    ok(abs(s["bottom"] - b0) < 0.5 and not s["cls"], f"6 keyboard: a dock already above the keyboard stays put ({s})")
+    top = b0 - 40  # … and one that would cover it
+    page.evaluate(f"__kb({top})")
+    s = st("#p6 .pk-dock")
+    ok(abs(s["bottom"] - (top - 8)) < 0.6 and s["cls"], f"6 keyboard: part 6's dock in the page rides 8 pt above it too ({s})")
+    page.evaluate(f"__kb({H})")
+    page.click("#p6 .pk-search-close")
+    ok(not st("#dock")["cls"] and st("#p6 .pk-dock")["kb"] == "0px", "6 keyboard: only the searching dock was lifted")
 
 
 @behaviour

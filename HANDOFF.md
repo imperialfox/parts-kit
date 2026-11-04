@@ -1,3 +1,39 @@
+# Handoff · Parts kit 1.2 · 4 Nov 2026
+
+> **Render:** Approved by Ivan on 4 Nov 2026, 18:36 ("render", all three pieces of the Singing project's `claude/vs_motion_and_kit_bars_blueprint.md`), for piece A as written, with every *Default if unanswered* taken.
+> **Build:** Ivan, 4 Nov 2026, 19:33 ("Parts kit 1.2 buid", after checking it hadn't shipped), in a fresh chat. Built by Claude.
+> **The rule for every kit version:** Render approves a named scope only; nothing is built, committed or released until Ivan separately says Build.
+
+**For:** Claude · **Job:** build · **Builder:** Claude
+**Repo:** `imperialfox/parts-kit`, from 1.1.0 (`ba8e785`) to 1.2.0. No Q number: it belongs to no app.
+**Plan (long notes):** the Singing project's `claude/vs_motion_and_kit_bars_blueprint.md` › A.
+**Needed by:** Vocal Sessions Q45 · Interface: Kit Top Bar and Search, which pins 1.2.0.
+**Why:** Ivan, 4 Nov 2026, 18:23: on the iPhone the search field must move up with the keyboard, so the field and what's typed stay in view.
+
+**Goal:** when part 6's search field is open on an iPhone, it moves up with the keyboard.
+
+## Agreed
+
+1. While the dock is searching (`.pk-searching`), the kit follows the visible area (`visualViewport` resize and scroll) and lifts the dock by the keyboard's height, with an 8 pt gap above it (a named value, `--pk-kb-gap`).
+2. The lift follows the keyboard as it moves: no separate spring or curve. Reduce Motion and speed 0 change nothing here.
+3. Opening the field focuses it without scrolling the page (`focus({ preventScroll: true })`).
+4. The kit publishes the lift as `--pk-kb` on the page, so an app can give its own list room at the bottom.
+5. Closing the keyboard brings the dock back down with it; ✕ still closes search.
+6. Version 1.2.0: changelog, README (part 6 row and a "Keyboard" note), this handoff with the Render, the Build and the Debrief, and the gallery's part 6 demo. Ivan makes the `v1.2.0` tag and release page if the session can't.
+
+## Out of scope
+
+Any other part; Vocal Sessions (Q45 pins the release); Android beyond "it still works"; the prototype kit's 1.2 (a separate plan).
+
+## Done when
+
+- `tools/check.py` passes, with new checks that fake a smaller visible area and see the dock lift by the right amount, then drop back when it grows. Everything 1.1 checked still passes.
+- The gallery is republished on 1.2.
+
+**Effort guess:** light to medium.
+
+---
+
 # Handoff · Parts kit 1.1 · 4 Nov 2026
 
 > **Render:** Approved by Ivan on 4 Nov 2026, 09:57 ("render - parts kit 1.1"), for the plan as written, with every *Default if unanswered* taken (decision 1 A, 2 A, 3 the default).

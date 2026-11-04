@@ -1,8 +1,8 @@
 # Parts kit
 
-![version](https://img.shields.io/badge/version-1.1.0-007aff)
+![version](https://img.shields.io/badge/version-1.2.0-007aff)
 
-**Current version:** 1.1.0 · 4 Nov 2026 · [changelog](CHANGELOG.md)
+**Current version:** 1.2.0 · 4 Nov 2026 · [changelog](CHANGELOG.md)
 
 One set of Liquid Glass parts (sheets, menus, alerts, switches, the tab bar and the rest), built once, that any web app or prototype loads with a small settings file of its own. The parts look and move like iOS 26/27, using numbers measured against real iPhones where they exist. It belongs to no app, so any app can use it.
 
@@ -97,7 +97,7 @@ Every value the parts use is named in the defaults block at the top of `parts-ki
 - **Easings:** `--ease-pop`, `--ease-knob`, `--ease-out`, `--ease-in-out`, `--ease-decel`, `--ease-accel`, `--ease-back`, `--ease-lift`, `--ease-linear`, `--ease-steps`.
 - **Durations:** `--dur-quick` 120, `--dur-fade` 200, `--dur-lift-in` 150, `--dur-lift-out` 60, `--dur-switch` 380, `--dur-knob` 150, `--dur-squish` 450, `--dur-appear` 250, `--dur-leave` 350, `--dur-rise` 350, `--dur-cover` 500, `--dur-toast-in` 500, `--dur-toast-out` 350, `--dur-close` 170, `--dur-ramp` 260, `--dur-lift-row` 360, `--dur-recede` 320, `--dur-morph` 420, `--dur-reduced` 100, `--dur-glint` 500, `--dur-progress` 600, `--dur-spin` 1 s.
 - **Kit-only looks** start `--pk-` (menu material `--pk-menu`, dims `--pk-dim` 54% and `--pk-dim-light` 20% / 25%, the grabber, switch and knob colours, and so on).
-- **Layout:** `--dockb`, `--dockl`, `--dockr` (where the tab bar sits; 21 pt on an upright iPhone), `--pk-bar-top` (where top bar buttons sit), `--pk-search-gap`.
+- **Layout:** `--dockb`, `--dockl`, `--dockr` (where the tab bar sits; 21 pt on an upright iPhone), `--pk-bar-top` (where top bar buttons sit), `--pk-search-gap`, `--pk-kb-gap` (8 pt: how far an open search field sits above the iPhone keyboard; see [Keyboard](#keyboard)).
 
 The rule: nothing below the defaults block writes its own corner, press, curve or duration. `tools/values.py` checks it, the same way an app's value test does.
 
@@ -140,6 +140,22 @@ const stale = Object.keys(KNOWN).filter((k) => !found.includes(k)); // a decisio
 
 Run it on each screen the app's test opens, so one-element differences are seen where they live. If a later kit version improves a spring the app overrides, the app keeps its own numbers; the list shows it on every build, so it's never by accident.
 
+## Keyboard
+
+New in 1.2. When the tab bar's search field (part 6) is open on an iPhone, the dock rides 8 pt above the keyboard, so the field and what's typed stay in view.
+
+- **It follows the keyboard.** The kit reads the visible area (`visualViewport`, as it changes size or moves) and lifts the searching dock by however much the keyboard would cover it, plus `--pk-kb-gap`. There's no spring or curve of its own, so Reduce Motion and speed 0 change nothing here. A dock that the keyboard doesn't reach (one higher up the page) stays where it is.
+- **It comes back down with it.** Closing the keyboard (scrolling, tapping elsewhere) brings the dock down, with search still open. After ✕ the dock stays up until the keyboard has gone, then comes down with it.
+- **Opening the field** focuses it without scrolling the page.
+- **Room for your list:** the lift is published as `--pk-kb` on `<html>` (`0px` with no keyboard). Give the list behind the dock that much more room at the bottom, so its last row scrolls clear of the field:
+
+```css
+.results { padding-bottom: calc(100px + var(--pk-kb)); }
+```
+
+- `pk:keyboard { lift }` fires on the dock each time the lift changes. `Parts.keyboard()` reads the visible area again now and returns the lift (for tests).
+- Pinch zoom isn't a keyboard and lifts nothing. On Android the same reading works where the browser reports the visible area this way; where it resizes the page instead, nothing needs lifting.
+
 ## Gestures
 
 Whatever the finger lands on gets first claim: switches, sliders, segmented controls, the tab bar, swipe rows, reorder handles, fields and anything marked `data-own-gesture` beat swiping back on a pushed page and dragging a sheet. Dragging gestures follow the finger at once and settle on springs; flicks carry their speed (a sheet: 700 pt/s; a switch: 200 px/s; swiping back: 500 pt/s).
@@ -155,7 +171,7 @@ Numbers are the Parts gallery's. Every part sends `pk:` events that bubble (`pk:
 | 1 | Glass material | `.pk-glass`, `.pk-strong`, `.pk-clear`, `.pk-tinted` | Measured. Glass on the control layer only; `.pk-clear` is glass inside glass (no second blur). |
 | 2, 51 | Top bar and soft edge | `.pk-topbar` (with `.pk-edge`, `.pk-topbar-title`, `.pk-bar-slot.pk-left` / `.pk-right`) beside a `.pk-scroll` | Soft edge and small title after 36 pt. `.pk-edge-blur` (three blurs), `.pk-edge-bottom` (60 pt). |
 | 3 | Large title | `.pk-large-title`, `.pk-date-line` | 34 pt bold. |
-| 4–6 | Tab bar, folding, search | `.pk-dock` > `.pk-tabbar.pk-glass` (`.pk-tab-ind` + `.pk-tab`s), `.pk-tab-pill`, `.pk-search-circle`, `.pk-search-field`, `.pk-search-close` | Tap or drag; `pk:change { index }`, `pk:search { open }`. Folding with `tabBar.fold`. |
+| 4–6 | Tab bar, folding, search | `.pk-dock` > `.pk-tabbar.pk-glass` (`.pk-tab-ind` + `.pk-tab`s), `.pk-tab-pill`, `.pk-search-circle`, `.pk-search-field`, `.pk-search-close` | Tap or drag; `pk:change { index }`, `pk:search { open }`. Folding with `tabBar.fold`. An open search field rides `--pk-kb-gap` (8 pt) above the iPhone keyboard; the lift is `--pk-kb` (see [Keyboard](#keyboard)). |
 | 10 | Pushed page | `.pk-push`; `Parts.push(page, { under })`, `Parts.pop(page)` | Swipe right from anywhere on it. `pk:push`, `pk:pop`. |
 | 11 | Top bar buttons changing | `Parts.bar.swap(button, iconHTML)`, `Parts.bar.appear(slot, html)`, `Parts.bar.leave(slot)` | Measured: blur σ 6 out / 3.5 in, swell 22%; 250 ms in, 350 ms out. |
 | 12 | Glass button | `.pk-btn.pk-glass.pk-press` + `.pk-circle` / `.pk-pill` / `.pk-cta` | Measured: grows 17 pt on its longest side (44 pt circle ×1.39), lights up. |
@@ -219,13 +235,13 @@ Menu items are `{ label, icon, red, disabled, value, sub }` or `'-'` for a gap. 
 
 ## Other calls
 
-`Parts.version`, `Parts.current` (the settings in force), `Parts.differences()` (above), `Parts.problems`, `Parts.check()`, `Parts.allowed(group, key)`, `Parts.own()`, `Parts.refresh()` (place bar highlights now; the kit also does it when the page changes), `Parts.layer()`, `Parts.rel(el)`, `Parts.open` (how many overlays are open), `Parts.N` (gesture numbers), `Parts.SCHEMA`, `Parts.DEFAULTS`.
+`Parts.version`, `Parts.current` (the settings in force), `Parts.differences()` (above), `Parts.keyboard()` (see [Keyboard](#keyboard)), `Parts.problems`, `Parts.check()`, `Parts.allowed(group, key)`, `Parts.own()`, `Parts.refresh()` (place bar highlights now; the kit also does it when the page changes), `Parts.layer()`, `Parts.rel(el)`, `Parts.open` (how many overlays are open), `Parts.N` (gesture numbers), `Parts.SCHEMA`, `Parts.DEFAULTS`.
 
 ## The demo and the checks
 
 - `demo/index.html` is the Parts gallery: every part with its number, built on the kit's own parts and shown in the pinned prototype kit's frame (`demo/vendor/prototype-kit/`, used only by the demo). The controls panel switches every setting both ways.
 - `python tools/bundle.py` makes `dist/parts-gallery.html`, one file for the Claude artifact viewer.
-- `python tools/check.py [shots]` (needs Playwright) runs everything: the value rule, the two dark blocks identical, no personal data or app names in the kit, the pinned copies and checksums; settings refused and accepted, the sample settings, an app's MOTION followed; spring overrides, one-element timings and springs, `Parts.differences()`, overrides under Reduce Motion and speed 0; the gallery at 402 × 874 and 820 × 1180 in light, dark, Reduce transparency, Reduce Motion and motion off (screenshots, no errors, no sideways scroll, no "NaN", "undefined" or "null"); and every behaviour and setting both ways.
+- `python tools/check.py [shots]` (needs Playwright) runs everything: the value rule, the two dark blocks identical, no personal data or app names in the kit, the pinned copies and checksums; settings refused and accepted, the sample settings, an app's MOTION followed; spring overrides, one-element timings and springs, `Parts.differences()`, overrides under Reduce Motion and speed 0; the search field riding above a faked keyboard and dropping back; the gallery at 402 × 874 and 820 × 1180 in light, dark, Reduce transparency, Reduce Motion and motion off (screenshots, no errors, no sideways scroll, no "NaN", "undefined" or "null"); and every behaviour and setting both ways.
 - `tools/plain.html` is a plain page with no app, for checking the kit stands on its own.
 
 ## Files

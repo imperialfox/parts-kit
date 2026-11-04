@@ -1,4 +1,4 @@
-/* Parts kit 1.1.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
+/* Parts kit 1.2.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
    Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
 
    Use: load parts-kit.css and this file, then your settings file:  Parts.settings({ app: 'My app', … })
@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   if (window.Parts && window.Parts.version) return;
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const doc = document;
   const html = doc.documentElement;
 
@@ -840,6 +840,7 @@
     if (t.classList.contains('pk-tab-pill')) return dock.classList.remove('pk-folded');
     const on = t.classList.contains('pk-search-circle');
     dock.classList.toggle('pk-searching', on);
+    if (on) kbFollow(dock);
     const inp = dock.querySelector('.pk-search-field input');
     if (inp) {
       if (on) setTimeout(() => inp.focus({ preventScroll: true }), 60);
@@ -849,8 +850,83 @@
         inp.blur();
       }
     }
+    kbWatch();
     emit(dock, 'search', { open: on });
   });
+
+  /* (6) the keyboard: while a dock is searching, it rides --pk-kb-gap (8 pt) above the iPhone keyboard, so the field
+     and what's typed stay in view. It follows the visible area (visualViewport) as the keyboard moves: no spring of
+     its own, so Reduce Motion and speed 0 change nothing. The lift is published as --pk-kb on <html>, so an app can
+     give its list that much more room at the bottom. After ✕ the dock stays lifted until the keyboard has gone, so it
+     comes down with it. Pinch zoom (scale ≠ 1) is not a keyboard and lifts nothing. */
+  let kbDock = null,
+    kbLift = 0,
+    kbUntil = 0;
+  function kbSet(lift) {
+    if (lift === kbLift) return;
+    kbLift = lift;
+    if (kbDock) {
+      kbDock.classList.toggle('pk-kb', lift > 0);
+      kbDock.style.setProperty('--pk-kb-lift', lift + 'px');
+    }
+    html.style.setProperty('--pk-kb', lift + 'px');
+    if (kbDock) emit(kbDock, 'keyboard', { lift });
+  }
+  function kbFollow(dock) {
+    if (kbDock && kbDock !== dock) {
+      kbSet(0);
+      kbDock.classList.remove('pk-kb');
+      kbDock.style.removeProperty('--pk-kb-lift');
+    }
+    kbDock = dock;
+  }
+  function keyboard() {
+    const dock = kbDock;
+    if (!dock) return 0;
+    const vv = window.visualViewport;
+    let lift = 0;
+    if (dock.isConnected && vv && Math.abs((vv.scale || 1) - 1) < 0.01) {
+      const top = vv.offsetTop + vv.height; // the keyboard's top edge, in page coordinates
+      if (html.clientHeight - top > 1) {
+        const rest = dock.getBoundingClientRect().bottom + kbLift; // where the dock sits with no lift
+        const gap = parseFloat(getComputedStyle(dock).getPropertyValue('--pk-kb-gap')) || 0;
+        lift = Math.max(0, Math.round(rest + gap - top));
+      }
+    }
+    kbSet(lift);
+    if (!lift && !dock.classList.contains('pk-searching')) {
+      dock.classList.remove('pk-kb');
+      dock.style.removeProperty('--pk-kb-lift');
+      kbDock = null;
+    }
+    return lift;
+  }
+  // iOS can report the visible area in steps while the keyboard moves: read it every frame for a moment after
+  // anything that opens or closes the keyboard, as well as on every visualViewport event
+  function kbWatch() {
+    if (!kbDock) return;
+    const was = kbUntil;
+    kbUntil = performance.now() + 700;
+    if (was > performance.now()) return;
+    const tick = () => {
+      keyboard();
+      if (kbDock && performance.now() < kbUntil) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', keyboard);
+    window.visualViewport.addEventListener('scroll', keyboard);
+  }
+  window.addEventListener('resize', keyboard);
+  doc.addEventListener('focusin', (ev) => {
+    const d = ev.target.closest && ev.target.closest('.pk-dock.pk-searching');
+    if (d) {
+      kbFollow(d);
+      kbWatch();
+    }
+  });
+  doc.addEventListener('focusout', () => kbWatch());
 
   /* (10) pushed page: Parts.push(page, {under}) slides it in; swipe right from anywhere on it, or Parts.pop(page) */
   const navDims = new WeakMap();
@@ -2092,6 +2168,7 @@
     rel,
     refresh: refreshAll,
     differences,
+    keyboard,
     sheet,
     cover,
     menu,

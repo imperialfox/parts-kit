@@ -1,4 +1,4 @@
-/* Parts kit 1.1.0 · one set of Liquid Glass parts for any app or prototype.
+/* Parts kit 1.2.0 · one set of Liquid Glass parts for any app or prototype.
    MIT licence. Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
    Load this file first, then your app's own stylesheet: any value below that your app also sets is yours.
    Every corner, press, curve and duration the parts use is named in the defaults block; nothing below it writes its
@@ -147,6 +147,8 @@
   --dockl: 21px;
   --dockr: 21px;
   --pk-search-gap: 8px; /* tabBar.searchGap (D02) */
+  --pk-kb-gap: 8px; /* (6) how far the searching dock sits above the iPhone keyboard */
+  --pk-kb: 0px; /* (6) how far the keyboard has lifted the searching dock (set by parts-kit.js) */
   --pk-bar-top: 54px; /* where the top bar's buttons sit (below the status bar) */
   --pk-speed: 1; /* the motion speed: 1 normal, 4 slow, 0 off (set by parts-kit.js) */
 }
@@ -783,6 +785,11 @@ body > .pk-layer {
   opacity: 0;
   scale: 0.8;
   pointer-events: none;
+}
+/* (6) the keyboard: while searching, the dock rides --pk-kb-gap above the iPhone keyboard. parts-kit.js sets the
+   lift from the visible area as the keyboard moves, so there is no transition here. */
+.pk-dock.pk-kb {
+  translate: 0 calc(var(--pk-kb-lift) * -1);
 }
 
 /* (10) a pushed page slides in from the right while the page underneath moves a third left and dims */

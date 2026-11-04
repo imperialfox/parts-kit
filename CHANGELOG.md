@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0 · 4 Nov 2026
+
+*The search field stays in view above the iPhone keyboard*
+
+**Keyboard**
+- While the tab bar's search field (part 6) is open, the dock rides 8 pt above the iPhone keyboard (`--pk-kb-gap`, a named value an app can change), so the field and what's typed stay in view.
+- It follows the visible area (`visualViewport`) as the keyboard moves: no spring of its own, so Reduce Motion and speed 0 change nothing here. A dock the keyboard doesn't reach stays put.
+- Closing the keyboard brings the dock back down, with search still open. After ✕ it stays up until the keyboard has gone, then comes down with it.
+- The lift is published as `--pk-kb` on `<html>`, so an app can give the list behind the dock room at the bottom. `pk:keyboard { lift }` fires when it changes; `Parts.keyboard()` reads it again now.
+- Opening the field still focuses it without scrolling the page.
+
+**Also**
+- README: a Keyboard section, and the part 6 row.
+- The Parts gallery's part 6 says how it behaves with the keyboard.
+- `tools/check.py`: a faked keyboard lifts the dock to 8 pt above it (normally, at speed 0 and under Reduce Motion), follows a panned visible area and a smaller keyboard, drops back when it goes, waits for the keyboard after ✕, takes a changed `--pk-kb-gap`, ignores pinch zoom, lifts part 6's dock in the page only when the keyboard would cover it, and opening the field doesn't scroll the page.
+
 ## 1.1.0 · 4 Nov 2026
 
 *The kit leads the motion, and an app can differ on purpose, with every difference listed*

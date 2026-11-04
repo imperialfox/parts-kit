@@ -437,6 +437,381 @@
   window.addEventListener('pointerup', unpress);
   window.addEventListener('pointercancel', unpress);
 
+  /* ============================================================================================================
+     GLASS, BARS AND BUTTONS
+     ============================================================================================================ */
+
+  /* (2, 5) scrolling: the top bar's soft edge and small title, and (tabBar.fold, D01) the tab bar folding.
+     A .pk-scroll finds its .pk-topbar and .pk-dock beside it (the same parent), or by data-topbar / data-dock. */
+  const scrollRuns = new WeakMap();
+  function partner(sc, attr, cls) {
+    const id = sc.getAttribute(attr);
+    if (id) return doc.querySelector(id);
+    return sc.parentElement ? sc.parentElement.querySelector(':scope > ' + cls) : null;
+  }
+  function onScroll(sc) {
+    const y = sc.scrollTop;
+    const bar = partner(sc, 'data-topbar', '.pk-topbar');
+    if (bar) bar.classList.toggle('pk-scrolled', y > N.edge);
+    const dock = partner(sc, 'data-dock', '.pk-dock');
+    if (!dock || !S.tabBar.fold || !dock.querySelector('.pk-tab-pill')) return;
+    const st = scrollRuns.get(sc) || { last: y, run: 0 };
+    const d = y - st.last;
+    st.last = y;
+    if (sc.scrollHeight - sc.clientHeight > N.fold.extent) {
+      if (Math.sign(d) !== Math.sign(st.run)) st.run = 0;
+      st.run += d;
+      if (y <= 0) dock.classList.remove('pk-folded');
+      else if (st.run > N.fold.down) dock.classList.add('pk-folded');
+      else if (st.run < -N.fold.up) dock.classList.remove('pk-folded');
+    }
+    scrollRuns.set(sc, st);
+  }
+  doc.addEventListener('scroll', (ev) => {
+    const sc = ev.target;
+    if (sc && sc.classList && sc.classList.contains('pk-scroll')) onScroll(sc);
+  }, true);
+
+  /* (4, 23) indicator bars: the tab bar's highlight and the segmented control's knob, placed by --pk-i of --pk-n.
+     Tap or drag; the highlight swells into clear glass while pressed. (23) segmented.style 'squish' (D04's
+     alternative) slides and squishes on a tap instead, with no drag or swell. */
+  const BARS = '.pk-tabbar, .pk-seg';
+  const itemsOf = (bar) => $$(bar.classList.contains('pk-tabbar') ? ':scope > .pk-tab' : ':scope > button', bar);
+  const indOf = (bar) => bar.querySelector(':scope > .pk-tab-ind, :scope > .pk-seg-ind');
+  const squishy = (bar) => bar.classList.contains('pk-seg') && S.segmented.style === 'squish';
+  function refreshBar(bar) {
+    const its = itemsOf(bar);
+    if (!its.length) return;
+    let i = its.findIndex((t) => t.classList.contains('on'));
+    if (i < 0) {
+      i = 0;
+      its[0].classList.add('on');
+    }
+    bar.style.setProperty('--pk-n', its.length);
+    bar.style.setProperty('--pk-i', i);
+    its.forEach((t, j) => t.setAttribute(bar.classList.contains('pk-tabbar') ? 'aria-selected' : 'aria-pressed', String(j === i)));
+  }
+  function selectBar(bar, i, quiet) {
+    const its = itemsOf(bar);
+    if (!its[i]) return;
+    const was = its.findIndex((t) => t.classList.contains('on'));
+    its.forEach((t, j) => t.classList.toggle('on', j === i));
+    refreshBar(bar);
+    if (squishy(bar) && was !== i && motion.on()) {
+      const k = indOf(bar);
+      if (k) {
+        k.classList.remove('pk-squish');
+        void k.offsetWidth;
+        k.classList.add('pk-squish');
+        after(() => k.classList.remove('pk-squish'), dur('--dur-squish'));
+      }
+    }
+    if (!quiet && was !== i) emit(bar, 'change', { index: i, value: its[i].dataset.value || its[i].textContent.trim() });
+  }
+  let barDrag = null;
+  const nearestItem = (bar, cx) => {
+    let b = 0, bd = 1e9;
+    itemsOf(bar).forEach((t, i) => {
+      const d = Math.abs(t.offsetLeft + t.offsetWidth / 2 - cx);
+      if (d < bd) {
+        bd = d;
+        b = i;
+      }
+    });
+    return b;
+  };
+  const barX = (bar, ev) => (ev.clientX - bar.getBoundingClientRect().left) / scaleOf(bar);
+  function liveBar(bar, on) {
+    const k = indOf(bar);
+    if (!k) return;
+    const sw = on && !motion.reduced() && !squishy(bar);
+    k.classList.toggle('pk-live', sw);
+    if (sw) {
+      k.style.setProperty('--pk-bx', ((k.offsetWidth + N.bloom[0]) / k.offsetWidth).toFixed(3));
+      k.style.setProperty('--pk-by', ((k.offsetHeight + N.bloom[1]) / k.offsetHeight).toFixed(3));
+    } else {
+      k.style.removeProperty('--pk-bx');
+      k.style.removeProperty('--pk-by');
+    }
+  }
+  const under = (bar, i) => itemsOf(bar).forEach((t, j) => t.classList.toggle('pk-under', j === i && bar.classList.contains('pk-tabbar') && indOf(bar) && indOf(bar).classList.contains('pk-live')));
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const bar = ev.target.closest && ev.target.closest(BARS);
+    if (!bar || !indOf(bar)) return;
+    refreshBar(bar);
+    barDrag = { bar, id: ev.pointerId, x0: ev.clientX, moved: false, start: nearestItem(bar, barX(bar, ev)) };
+    try {
+      bar.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    liveBar(bar, true);
+    under(bar, barDrag.start);
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = barDrag;
+    if (!d || ev.pointerId !== d.id || squishy(d.bar)) return;
+    const bar = d.bar, s = scaleOf(bar);
+    if (!d.moved && Math.abs((ev.clientX - d.x0) / s) < N.tap) return;
+    d.moved = true;
+    const k = indOf(bar);
+    k.classList.add('pk-drag');
+    const cx = barX(bar, ev), w = k.offsetWidth, pad = parseFloat(getComputedStyle(bar).paddingLeft) || 0;
+    let x = cx - w / 2 - pad;
+    const max = bar.clientWidth - 2 * pad - w;
+    if (x < 0) x = -Math.min(0.3 * w, -x * 0.4);
+    if (x > max) x = max + Math.min(0.3 * w, (x - max) * 0.4);
+    k.style.setProperty('--pk-x', x.toFixed(1) + 'px');
+    under(bar, nearestItem(bar, cx));
+  });
+  function endBar(ev) {
+    const d = barDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    barDrag = null;
+    const bar = d.bar, k = indOf(bar);
+    const i = d.moved ? nearestItem(bar, barX(bar, ev)) : d.start;
+    k.classList.remove('pk-drag');
+    selectBar(bar, ev.type === 'pointercancel' && !d.moved ? itemsOf(bar).findIndex((t) => t.classList.contains('on')) : i);
+    under(bar, i);
+    later(() => {
+      if (barDrag && barDrag.bar === bar) return;
+      liveBar(bar, false);
+      under(bar, -1);
+    }, 300);
+  }
+  doc.addEventListener('pointerup', endBar);
+  doc.addEventListener('pointercancel', endBar);
+  // place every bar's highlight when it appears (screens drawn as HTML text need no call)
+  let refreshQueued = false;
+  function refreshAll() {
+    refreshQueued = false;
+    $$(BARS).forEach(refreshBar);
+    $$('.pk-switch').forEach((sw) => sw.setAttribute('aria-checked', String(sw.classList.contains('on'))));
+  }
+  const queueRefresh = () => {
+    if (!refreshQueued) {
+      refreshQueued = true;
+      requestAnimationFrame(refreshAll);
+    }
+  };
+  if (window.MutationObserver) new MutationObserver(queueRefresh).observe(doc.documentElement, { childList: true, subtree: true });
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', refreshAll);
+  else queueRefresh();
+
+  /* (5, 6) the dock: the folded pill opens the bar; the search circle opens the search field; ✕ closes it */
+  doc.addEventListener('click', (ev) => {
+    const t = ev.target.closest && ev.target.closest('.pk-tab-pill, .pk-search-circle, .pk-search-close');
+    if (!t) return;
+    const dock = t.closest('.pk-dock');
+    if (!dock) return;
+    if (t.classList.contains('pk-tab-pill')) return dock.classList.remove('pk-folded');
+    const on = t.classList.contains('pk-search-circle');
+    dock.classList.toggle('pk-searching', on);
+    const inp = dock.querySelector('.pk-search-field input');
+    if (inp) {
+      if (on) setTimeout(() => inp.focus({ preventScroll: true }), 60);
+      else {
+        inp.value = '';
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        inp.blur();
+      }
+    }
+    emit(dock, 'search', { open: on });
+  });
+
+  /* (10) pushed page: Parts.push(page, {under}) slides it in; swipe right from anywhere on it, or Parts.pop(page) */
+  const navDims = new WeakMap();
+  function underOf(page, o) {
+    const u = (o && o.under) || page.dataset.under;
+    if (u) return typeof u === 'string' ? doc.querySelector(u) : u;
+    return page.parentElement ? page.parentElement.querySelector(':scope > .pk-scroll') : null;
+  }
+  function navDim(page) {
+    let d = navDims.get(page);
+    if (!d || !d.isConnected) {
+      d = doc.createElement('div');
+      d.className = 'pk-navdim';
+      page.before(d);
+      navDims.set(page, d);
+    }
+    return d;
+  }
+  function push(page, o) {
+    const u = underOf(page, o);
+    page._pkUnder = u;
+    page.classList.add('pk-shown');
+    page.style.setProperty('--pk-px', '0px');
+    void page.offsetWidth;
+    page.classList.add('pk-on');
+    if (u) {
+      u.classList.remove('pk-pushed-back');
+      u.classList.add('pk-pushed-under');
+    }
+    navDim(page).classList.add('pk-on');
+    emit(page, 'push');
+  }
+  function pop(page) {
+    const u = page._pkUnder;
+    page.classList.remove('pk-on');
+    page.style.setProperty('--pk-px', '0px');
+    if (u) {
+      u.classList.remove('pk-pushed-under');
+      u.classList.add('pk-pushed-back');
+      u.style.removeProperty('translate');
+    }
+    navDim(page).classList.remove('pk-on');
+    after(() => {
+      if (page.classList.contains('pk-on')) return;
+      page.classList.remove('pk-shown');
+      if (u) u.classList.remove('pk-pushed-back');
+    }, motion.spring('nav'));
+    emit(page, 'pop');
+  }
+  let backDrag = null;
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const page = ev.target.closest && ev.target.closest('.pk-push.pk-on');
+    if (!page || ownedBy(ev.target, page) || ev.target.closest('button, a, .pk-hold')) return;
+    backDrag = { page, x: ev.clientX, y: ev.clientY, id: ev.pointerId, on: false, tr: tracker() };
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = backDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    const page = d.page, s = scaleOf(page), dx = (ev.clientX - d.x) / s, dy = (ev.clientY - d.y) / s;
+    if (!d.on) {
+      if (dx > 8 && Math.abs(dx) > Math.abs(dy)) {
+        d.on = true;
+        try {
+          page.setPointerCapture(ev.pointerId);
+        } catch (e) {}
+        page.classList.add('pk-tracking');
+        if (page._pkUnder) page._pkUnder.classList.add('pk-tracking');
+      } else if (Math.abs(dy) > 10) {
+        backDrag = null;
+        return;
+      } else return;
+    }
+    const W = page.offsetWidth, p = Math.max(0, dx);
+    page.style.setProperty('--pk-px', p + 'px');
+    if (page._pkUnder && !motion.reduced()) page._pkUnder.style.translate = (-33 + (33 * p) / W).toFixed(2) + '% 0';
+    navDim(page).style.opacity = String(1 - p / W);
+    d.tr.add(dx);
+  });
+  function endBack(ev) {
+    const d = backDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    backDrag = null;
+    if (!d.on) return;
+    const page = d.page;
+    page.classList.remove('pk-tracking');
+    if (page._pkUnder) {
+      page._pkUnder.classList.remove('pk-tracking');
+      page._pkUnder.style.removeProperty('translate');
+    }
+    navDim(page).style.opacity = '';
+    const dx = parseFloat(page.style.getPropertyValue('--pk-px')) || 0;
+    if (dx > page.offsetWidth * N.back.distance || d.tr.v() > N.back.flick) pop(page);
+    else page.style.setProperty('--pk-px', '0px');
+  }
+  doc.addEventListener('pointerup', endBack);
+  doc.addEventListener('pointercancel', endBack);
+
+  /* (11) top bar buttons changing between pages (measured): Parts.bar.swap(button, iconHTML) blurs the old icon out
+     (σ 6) and the new one in (σ 3.5) while the circle swells up to 22%; Parts.bar.appear(slot, html) and
+     Parts.bar.leave(slot) add or take away a button (250 ms in, 350 ms out). Reduce Motion: a short cross-fade. */
+  const bar = {
+    swap(btn, iconHTML) {
+      const old = btn.querySelector(':scope > .pk-ico');
+      const nu = doc.createElement('span');
+      nu.className = 'pk-ico';
+      nu.innerHTML = iconHTML;
+      btn.append(nu);
+      const T = dur('--dur-morph');
+      if (!old) return;
+      if (!motion.on() || !T) {
+        if (motion.reduced() && T) {
+          old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur('--dur-reduced'), fill: 'forwards' }).onfinish = () => old.remove();
+          nu.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-reduced') });
+        } else old.remove();
+        return;
+      }
+      old.animate([{ opacity: 1, filter: 'blur(0px)' }, { opacity: 0, filter: 'blur(6px)' }], { duration: T * 0.42, easing: 'linear', fill: 'forwards' }).onfinish = () => old.remove();
+      nu.animate([{ opacity: 0, filter: 'blur(3.5px)' }, { opacity: 0, filter: 'blur(3.5px)', offset: 0.25 }, { opacity: 1, filter: 'blur(0px)' }], { duration: T * 0.84, easing: ease('--ease-out') });
+      btn.animate([{ scale: '1' }, { scale: '1.22', offset: 0.6 }, { scale: '0.98', offset: 0.85 }, { scale: '1' }], { duration: T, easing: ease('--ease-out'), composite: 'add' });
+    },
+    appear(slot, buttonHTML) {
+      slot.insertAdjacentHTML('beforeend', buttonHTML);
+      const b = slot.lastElementChild;
+      return appearAs(b, 1.1, true);
+    },
+    leave(slot, btn) {
+      const b = btn || slot.lastElementChild;
+      if (!b) return Promise.resolve();
+      return leaveAs(b, true);
+    },
+  };
+  // the materialize choreography (M): in over 250 ms (glass full at 92%, content sharpening from an 8 px blur over
+  // the last 65%, scale from 1.15, or 1.1 inside a bar); out over 350 ms (content gone by 55%, then the empty glass)
+  function appearAs(el, from, force) {
+    const T = dur('--dur-appear');
+    if (!force && !motion.on()) return Promise.resolve();
+    if (!T) return Promise.resolve();
+    if (motion.reduced()) return el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-reduced') }).finished.catch(() => {});
+    const inner = el.querySelector('svg, .pk-ico, span');
+    if (inner) inner.animate([{ opacity: 0, filter: 'blur(8px)' }, { opacity: 0, filter: 'blur(8px)', offset: 0.35 }, { opacity: 1, filter: 'blur(0px)' }], { duration: T, easing: 'linear' });
+    return el.animate([{ scale: String(from), opacity: 0 }, { scale: '1', opacity: 1, offset: 0.92 }, { scale: '1', opacity: 1 }], { duration: T, easing: 'linear' }).finished.catch(() => {});
+  }
+  function leaveAs(el) {
+    const T = dur('--dur-leave');
+    const done = () => el.remove();
+    if (!T) {
+      done();
+      return Promise.resolve();
+    }
+    if (motion.reduced()) {
+      const a = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur('--dur-reduced'), fill: 'forwards' });
+      return a.finished.then(done, done);
+    }
+    const inner = el.querySelector('svg, .pk-ico, span');
+    if (inner) inner.animate([{ opacity: 1, filter: 'blur(0px)' }, { opacity: 0, filter: 'blur(8px)', offset: 0.55 }, { opacity: 0, filter: 'blur(8px)' }], { duration: T, easing: 'linear', fill: 'forwards' });
+    const a = el.animate([{ scale: '1', opacity: 1 }, { scale: '1.15', opacity: 0 }], { duration: T, easing: 'linear', fill: 'forwards' });
+    return a.finished.then(done, done);
+  }
+
+  /* (15) buttons on a bar that toggle (.pk-group.pk-toggles): aria-pressed, and a pk:change */
+  doc.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.pk-group.pk-toggles > .pk-btn');
+    if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    emit(b, 'change', { on });
+  });
+
+  /* (17) edit button: data-pk-edit="#list" (or the list it's in) toggles .pk-editing; its label becomes Done */
+  doc.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('[data-pk-edit]');
+    if (!b) return;
+    const sel = b.getAttribute('data-pk-edit');
+    const list = (sel && doc.querySelector(sel)) || b.closest('.pk-list');
+    if (!list) return;
+    const on = !list.classList.contains('pk-editing');
+    list.classList.toggle('pk-editing', on);
+    if (!b.dataset.pkLabel) b.dataset.pkLabel = b.textContent.trim();
+    b.textContent = on ? b.dataset.done || 'Done' : b.dataset.pkLabel;
+    b.style.fontWeight = on ? '600' : '';
+    if (motion.on()) b.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-fade') });
+    emit(list, 'edit', { on });
+  });
+
+  /* (18) chips: a tap picks or unpicks (not the "+ Your own" chip, and not in a .pk-chips.pk-static) */
+  doc.addEventListener('click', (ev) => {
+    const c = ev.target.closest && ev.target.closest('.pk-chip');
+    if (!c || c.classList.contains('pk-chip-add') || c.closest('.pk-static')) return;
+    const on = !c.classList.contains('on');
+    c.classList.toggle('on', on);
+    c.setAttribute('aria-pressed', String(on));
+    emit(c, 'change', { on });
+  });
+
   /* ==PARTS== (each group below adds its part) */
 
   /* ============================================================================================================
@@ -461,6 +836,13 @@
     own: () => S.own,
     layer,
     rel,
+    refresh: refreshAll,
+    select: (barEl, i) => selectBar(barEl, i, true),
+    push,
+    pop,
+    bar,
+    appear: (el, o) => (allowed(S.glass.appear, o && o.key) ? appearAs(el, (o && o.from) || 1.15) : Promise.resolve()),
+    leave: (el, o) => (allowed(S.glass.appear, o && o.key) ? leaveAs(el) : (el.remove(), Promise.resolve())),
   };
   Object.assign(Parts, window.__pkParts || {});
   window.Parts = Parts;

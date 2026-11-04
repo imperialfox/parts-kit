@@ -55,6 +55,15 @@
   --pk-row-press: #d1d1d6;
   --pk-seg-knob: #ffffff;
 
+  /* shadows: the named set of three */
+  --shadow-lifted: 0 8px 24px rgba(0, 0, 0, 0.18); /* a lifted card or row */
+  --shadow-floating: 0 8px 33px rgba(0, 0, 0, 0.08); /* menus, popovers, toasts */
+  --shadow-glow: 0 0 22px rgba(0, 122, 255, 0.35); /* a part calling attention to itself */
+
+}
+
+/* DEFAULTS · shapes, motion and layout (the same in every look) */
+:where(:root) {
   /* corners */
   --r-small: 10px; /* icon tiles, badges, small inner boxes */
   --r-medium: 14px; /* fields, inner boxes, menu rows */
@@ -68,11 +77,6 @@
   --press: 0.93; /* solid buttons */
   --press-row: 0.98; /* rows, when row.press is 'shrink' */
 
-  /* shadows: the named set of three */
-  --shadow-lifted: 0 8px 24px rgba(0, 0, 0, 0.18); /* a lifted card or row */
-  --shadow-floating: 0 8px 33px rgba(0, 0, 0, 0.08); /* menus, popovers, toasts */
-  --shadow-glow: 0 0 22px rgba(0, 122, 255, 0.35); /* a part calling attention to itself */
-
   /* easings (fixed curves; the springs are --ease-gentle … published by the motion core) */
   --ease-pop: cubic-bezier(0.3, 1.7, 0.45, 1); /* the solid press settle */
   --ease-knob: cubic-bezier(0.3, 1.35, 0.5, 1); /* the squish knob's settle */
@@ -83,6 +87,7 @@
   --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1); /* the slider knob */
   --ease-lift: cubic-bezier(0, 0, 0.58, 1); /* the press light coming up */
   --ease-linear: linear;
+  --ease-steps: steps(8); /* the spinner */
 
   /* durations (fixed; multiplied by the motion speed where used) */
   --dur-quick: 120ms;
@@ -105,6 +110,7 @@
   --dur-glint: 500ms;
   --dur-progress: 600ms;
   --dur-spin: 1s;
+  --dur-morph: 420ms; /* (M) a top bar button changing icon: the gel swell and the icons' blur */
 
   /* spring stand-ins until the motion core publishes the real ones (--ease-<name>, --dur-<name>) */
   --ease-gentle: var(--ease-out);
@@ -137,6 +143,7 @@
   --dockl: 21px;
   --dockr: 21px;
   --pk-search-gap: 8px; /* tabBar.searchGap (D02) */
+  --pk-bar-top: 54px; /* where the top bar's buttons sit (below the status bar) */
   --pk-speed: 1; /* the motion speed: 1 normal, 4 slow, 0 off (set by parts-kit.js) */
 }
 
@@ -461,4 +468,466 @@ body > .pk-layer {
 }
 .pk-dim.pk-on {
   opacity: 1;
+}
+
+/* ===================================================================================================================
+   GLASS, BARS AND BUTTONS
+   =================================================================================================================== */
+
+/* (2) top bar: no card of its own. After 36 pt of scrolling the soft edge and the small title fade in.
+   Put .pk-topbar beside the .pk-scroll it belongs to (same parent). */
+.pk-topbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100px;
+  z-index: 30;
+  pointer-events: none;
+}
+.pk-topbar-title {
+  position: absolute;
+  left: 70px;
+  right: 70px;
+  top: var(--pk-bar-top);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-bar-slot {
+  position: absolute;
+  top: var(--pk-bar-top);
+  height: 44px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+.pk-bar-slot.pk-left {
+  left: 16px;
+}
+.pk-bar-slot.pk-right {
+  right: 16px;
+}
+.pk-bar-slot > .pk-btn {
+  position: relative;
+}
+/* (51) the soft edge: mostly a fade of the page colour, not a blur (100 pt at the top, 60 pt at the bottom) */
+.pk-edge {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.7) 15%, rgba(0, 0, 0, 0.3) 45%, rgba(0, 0, 0, 0.04) 75%, transparent 92%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.7) 15%, rgba(0, 0, 0, 0.3) 45%, rgba(0, 0, 0, 0.04) 75%, transparent 92%);
+}
+.pk-edge.pk-text-heavy {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.9) 30%, rgba(0, 0, 0, 0.5) 60%, rgba(0, 0, 0, 0.04) 85%, transparent 95%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.9) 30%, rgba(0, 0, 0, 0.5) 60%, rgba(0, 0, 0, 0.04) 85%, transparent 95%);
+}
+.pk-edge-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 60px;
+  background: var(--bg);
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.7) 15%, rgba(0, 0, 0, 0.3) 45%, rgba(0, 0, 0, 0.04) 75%, transparent 92%);
+  mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.7) 15%, rgba(0, 0, 0, 0.3) 45%, rgba(0, 0, 0, 0.04) 75%, transparent 92%);
+}
+/* the blur kind of edge: three stacked blurs, strongest at the top (σ 18 → 6 → 2) */
+.pk-edge-blur {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-edge-blur > i {
+  position: absolute;
+  inset: 0;
+}
+.pk-edge-blur > i:nth-child(1) {
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 35%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 35%);
+}
+.pk-edge-blur > i:nth-child(2) {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 65%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 65%);
+}
+.pk-edge-blur > i:nth-child(3) {
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 20%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 20%, transparent 100%);
+}
+.pk-topbar.pk-scrolled :is(.pk-edge, .pk-edge-blur, .pk-topbar-title),
+.pk-topbar.pk-edge-on :is(.pk-edge, .pk-edge-blur) {
+  opacity: 1;
+}
+
+/* (3) large title, with an optional date line above */
+.pk-large-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin: 0;
+}
+.pk-date-line {
+  font-size: 13px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* (4) the tab bar: a 64 pt glass capsule. The picked tab sits on a flat 10% fill; pressed it turns to clear glass and
+   swells 12 × 8 pt; drag along it to switch. (6) the search circle sits 8 pt away (tabBar.searchGap, D02).
+   (5) folding into a pill on scroll is off unless tabBar.fold is on (D01). */
+.pk-dock {
+  position: absolute;
+  left: var(--dockl);
+  right: var(--dockr);
+  bottom: var(--dockb);
+  z-index: 31;
+  height: 64px;
+  display: flex;
+  gap: var(--pk-search-gap);
+  align-items: center;
+}
+.pk-dock.pk-inline {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+}
+.pk-tabbar {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 64px;
+  border-radius: 999px;
+  display: flex;
+  padding: 4px;
+  touch-action: none;
+  transform-origin: left center;
+  transition: scale var(--dur-gentle) var(--ease-gentle), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-tab {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg);
+  min-width: 0;
+}
+.pk-tab > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-tab svg {
+  transition: scale calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-tab.on {
+  color: var(--accent);
+}
+.pk-tab.pk-under svg {
+  scale: 1.15;
+}
+/* the highlight (tab bar) and knob (segmented control) share one rule: placed by --pk-i of --pk-n */
+.pk-tab-ind,
+.pk-seg-ind {
+  position: absolute;
+  z-index: 0;
+  border-radius: 999px;
+  translate: calc(var(--pk-i, 0) * 100%) 0;
+  scale: var(--pk-bx, 1) var(--pk-by, 1);
+  transition:
+    translate var(--dur-snap) var(--ease-snap),
+    scale var(--dur-snap) var(--ease-snap),
+    background-color var(--dur-bloom) var(--ease-bloom),
+    box-shadow var(--dur-bloom) var(--ease-bloom);
+}
+.pk-tab-ind {
+  left: 4px;
+  top: 4px;
+  bottom: 4px;
+  width: calc((100% - 8px) / var(--pk-n, 4));
+  background: var(--pk-rest);
+}
+.pk-tab-ind.pk-live,
+.pk-seg-ind.pk-live {
+  background: var(--pk-lens);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), inset 0 1px 0.5px rgba(255, 255, 255, 0.5), 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+.pk-tab-ind.pk-drag,
+.pk-seg-ind.pk-drag {
+  translate: var(--pk-x, 0px) 0;
+  transition:
+    scale var(--dur-snap) var(--ease-snap),
+    background-color var(--dur-bloom) var(--ease-bloom),
+    box-shadow var(--dur-bloom) var(--ease-bloom);
+}
+.motion-reduced :is(.pk-tab-ind, .pk-seg-ind) {
+  scale: none;
+  transition: none;
+}
+/* (5) folded: the bar shrinks into a 50 pt pill at its left */
+.pk-tab-pill {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  color: var(--accent);
+  opacity: 0;
+  scale: 0.5;
+  pointer-events: none;
+  transition: scale var(--dur-gentle) var(--ease-gentle), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-dock.pk-folded .pk-tabbar {
+  scale: 0.16 0.78;
+  opacity: 0;
+  pointer-events: none;
+}
+.pk-dock.pk-folded .pk-tab-pill {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+/* (6) the search circle opens into a 50 pt field on the pill spring; ✕ closes it */
+.pk-search-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+}
+.pk-search-field {
+  position: absolute;
+  left: 0;
+  right: 58px;
+  top: 7px;
+  height: 50px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  color: var(--fg2);
+  opacity: 0;
+  scale: 0.3 1;
+  transform-origin: right center;
+  pointer-events: none;
+  touch-action: pan-y;
+  transition: scale var(--dur-pill) var(--ease-pill), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-search-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: 17px;
+  color: var(--fg);
+}
+.pk-search-close {
+  position: absolute;
+  right: 0;
+  top: 7px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  opacity: 0;
+  scale: 0.5;
+  pointer-events: none;
+  transition: scale var(--dur-pill) var(--ease-pill), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-dock .pk-tabbar,
+.pk-dock .pk-search-circle {
+  transition: scale var(--dur-pill) var(--ease-pill), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-dock.pk-searching :is(.pk-search-field, .pk-search-close) {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+.pk-dock.pk-searching :is(.pk-tabbar, .pk-search-circle, .pk-tab-pill) {
+  opacity: 0;
+  scale: 0.8;
+  pointer-events: none;
+}
+
+/* (10) a pushed page slides in from the right while the page underneath moves a third left and dims */
+.pk-push {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: var(--bg);
+  overflow-y: auto;
+  translate: 100% 0;
+  box-shadow: var(--shadow-lifted);
+  touch-action: pan-y;
+  display: none;
+  transition: translate var(--dur-nav) var(--ease-nav);
+}
+.pk-push.pk-shown {
+  display: block;
+}
+.pk-push.pk-on {
+  translate: var(--pk-px, 0px) 0;
+}
+.pk-pushed-under {
+  translate: -33% 0;
+  transition: translate var(--dur-nav) var(--ease-nav);
+}
+.pk-pushed-back {
+  translate: 0 0;
+  transition: translate var(--dur-nav) var(--ease-nav);
+}
+.pk-tracking {
+  transition: none !important;
+}
+.pk-navdim {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  background: rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-nav) var(--ease-nav);
+}
+.pk-navdim.pk-on {
+  opacity: 1;
+}
+.motion-reduced .pk-pushed-under {
+  translate: none;
+}
+.motion-reduced .pk-push {
+  transition: translate 0s, opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-out);
+}
+
+/* (15) buttons on a bar: one glass capsule, the buttons inside only light up (never glass inside glass) */
+.pk-group {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+}
+.pk-group > .pk-btn {
+  width: 52px;
+  height: 44px;
+  border-radius: 999px;
+}
+.pk-group > .pk-btn[aria-pressed='true'] {
+  background: var(--pk-clear);
+}
+
+/* (17) edit button: Edit turns into Done and rows show their delete circles */
+.pk-edit-del {
+  flex: none;
+  width: 0;
+  overflow: hidden;
+  display: flex;
+  transition: width var(--dur-gentle) var(--ease-gentle);
+}
+.pk-editing .pk-edit-del {
+  width: 30px;
+}
+.pk-edit-del > i {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+}
+
+/* (18) chips: tap to pick; picked chips take the accent colour */
+.pk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pk-chip {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--fill);
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  transition:
+    background-color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out),
+    color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-chip.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.pk-chip.pk-chip-add {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--accent);
+}
+
+/* (19) badges: a count on a button, and a small word badge */
+.pk-badged {
+  position: relative;
+  display: inline-flex;
+}
+.pk-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  z-index: 25;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+.pk-tag {
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--tint);
+  color: var(--on-accent);
+  display: inline-flex;
+  align-items: center;
 }

@@ -223,6 +223,15 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   --pk-row-press: #d1d1d6;
   --pk-seg-knob: #ffffff;
 
+  /* shadows: the named set of three */
+  --shadow-lifted: 0 8px 24px rgba(0, 0, 0, 0.18); /* a lifted card or row */
+  --shadow-floating: 0 8px 33px rgba(0, 0, 0, 0.08); /* menus, popovers, toasts */
+  --shadow-glow: 0 0 22px rgba(0, 122, 255, 0.35); /* a part calling attention to itself */
+
+}
+
+/* DEFAULTS · shapes, motion and layout (the same in every look) */
+:where(:root) {
   /* corners */
   --r-small: 10px; /* icon tiles, badges, small inner boxes */
   --r-medium: 14px; /* fields, inner boxes, menu rows */
@@ -236,11 +245,6 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   --press: 0.93; /* solid buttons */
   --press-row: 0.98; /* rows, when row.press is 'shrink' */
 
-  /* shadows: the named set of three */
-  --shadow-lifted: 0 8px 24px rgba(0, 0, 0, 0.18); /* a lifted card or row */
-  --shadow-floating: 0 8px 33px rgba(0, 0, 0, 0.08); /* menus, popovers, toasts */
-  --shadow-glow: 0 0 22px rgba(0, 122, 255, 0.35); /* a part calling attention to itself */
-
   /* easings (fixed curves; the springs are --ease-gentle … published by the motion core) */
   --ease-pop: cubic-bezier(0.3, 1.7, 0.45, 1); /* the solid press settle */
   --ease-knob: cubic-bezier(0.3, 1.35, 0.5, 1); /* the squish knob's settle */
@@ -251,6 +255,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1); /* the slider knob */
   --ease-lift: cubic-bezier(0, 0, 0.58, 1); /* the press light coming up */
   --ease-linear: linear;
+  --ease-steps: steps(8); /* the spinner */
 
   /* durations (fixed; multiplied by the motion speed where used) */
   --dur-quick: 120ms;
@@ -273,6 +278,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   --dur-glint: 500ms;
   --dur-progress: 600ms;
   --dur-spin: 1s;
+  --dur-morph: 420ms; /* (M) a top bar button changing icon: the gel swell and the icons' blur */
 
   /* spring stand-ins until the motion core publishes the real ones (--ease-<name>, --dur-<name>) */
   --ease-gentle: var(--ease-out);
@@ -305,6 +311,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   --dockl: 21px;
   --dockr: 21px;
   --pk-search-gap: 8px; /* tabBar.searchGap (D02) */
+  --pk-bar-top: 54px; /* where the top bar's buttons sit (below the status bar) */
   --pk-speed: 1; /* the motion speed: 1 normal, 4 slow, 0 off (set by parts-kit.js) */
 }
 
@@ -631,6 +638,468 @@ body > .pk-layer {
   opacity: 1;
 }
 
+/* ===================================================================================================================
+   GLASS, BARS AND BUTTONS
+   =================================================================================================================== */
+
+/* (2) top bar: no card of its own. After 36 pt of scrolling the soft edge and the small title fade in.
+   Put .pk-topbar beside the .pk-scroll it belongs to (same parent). */
+.pk-topbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100px;
+  z-index: 30;
+  pointer-events: none;
+}
+.pk-topbar-title {
+  position: absolute;
+  left: 70px;
+  right: 70px;
+  top: var(--pk-bar-top);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-bar-slot {
+  position: absolute;
+  top: var(--pk-bar-top);
+  height: 44px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+.pk-bar-slot.pk-left {
+  left: 16px;
+}
+.pk-bar-slot.pk-right {
+  right: 16px;
+}
+.pk-bar-slot > .pk-btn {
+  position: relative;
+}
+/* (51) the soft edge: mostly a fade of the page colour, not a blur (100 pt at the top, 60 pt at the bottom) */
+.pk-edge {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.7) 15%, rgba(0, 0, 0, 0.3) 45%, rgba(0, 0, 0, 0.04) 75%, transparent 92%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.7) 15%, rgba(0, 0, 0, 0.3) 45%, rgba(0, 0, 0, 0.04) 75%, transparent 92%);
+}
+.pk-edge.pk-text-heavy {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.9) 30%, rgba(0, 0, 0, 0.5) 60%, rgba(0, 0, 0, 0.04) 85%, transparent 95%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.9) 30%, rgba(0, 0, 0, 0.5) 60%, rgba(0, 0, 0, 0.04) 85%, transparent 95%);
+}
+.pk-edge-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 60px;
+  background: var(--bg);
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.7) 15%, rgba(0, 0, 0, 0.3) 45%, rgba(0, 0, 0, 0.04) 75%, transparent 92%);
+  mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.7) 15%, rgba(0, 0, 0, 0.3) 45%, rgba(0, 0, 0, 0.04) 75%, transparent 92%);
+}
+/* the blur kind of edge: three stacked blurs, strongest at the top (σ 18 → 6 → 2) */
+.pk-edge-blur {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-edge-blur > i {
+  position: absolute;
+  inset: 0;
+}
+.pk-edge-blur > i:nth-child(1) {
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 35%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 35%);
+}
+.pk-edge-blur > i:nth-child(2) {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 65%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 65%);
+}
+.pk-edge-blur > i:nth-child(3) {
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 20%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 20%, transparent 100%);
+}
+.pk-topbar.pk-scrolled :is(.pk-edge, .pk-edge-blur, .pk-topbar-title),
+.pk-topbar.pk-edge-on :is(.pk-edge, .pk-edge-blur) {
+  opacity: 1;
+}
+
+/* (3) large title, with an optional date line above */
+.pk-large-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin: 0;
+}
+.pk-date-line {
+  font-size: 13px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* (4) the tab bar: a 64 pt glass capsule. The picked tab sits on a flat 10% fill; pressed it turns to clear glass and
+   swells 12 × 8 pt; drag along it to switch. (6) the search circle sits 8 pt away (tabBar.searchGap, D02).
+   (5) folding into a pill on scroll is off unless tabBar.fold is on (D01). */
+.pk-dock {
+  position: absolute;
+  left: var(--dockl);
+  right: var(--dockr);
+  bottom: var(--dockb);
+  z-index: 31;
+  height: 64px;
+  display: flex;
+  gap: var(--pk-search-gap);
+  align-items: center;
+}
+.pk-dock.pk-inline {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+}
+.pk-tabbar {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 64px;
+  border-radius: 999px;
+  display: flex;
+  padding: 4px;
+  touch-action: none;
+  transform-origin: left center;
+  transition: scale var(--dur-gentle) var(--ease-gentle), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-tab {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg);
+  min-width: 0;
+}
+.pk-tab > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-tab svg {
+  transition: scale calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-tab.on {
+  color: var(--accent);
+}
+.pk-tab.pk-under svg {
+  scale: 1.15;
+}
+/* the highlight (tab bar) and knob (segmented control) share one rule: placed by --pk-i of --pk-n */
+.pk-tab-ind,
+.pk-seg-ind {
+  position: absolute;
+  z-index: 0;
+  border-radius: 999px;
+  translate: calc(var(--pk-i, 0) * 100%) 0;
+  scale: var(--pk-bx, 1) var(--pk-by, 1);
+  transition:
+    translate var(--dur-snap) var(--ease-snap),
+    scale var(--dur-snap) var(--ease-snap),
+    background-color var(--dur-bloom) var(--ease-bloom),
+    box-shadow var(--dur-bloom) var(--ease-bloom);
+}
+.pk-tab-ind {
+  left: 4px;
+  top: 4px;
+  bottom: 4px;
+  width: calc((100% - 8px) / var(--pk-n, 4));
+  background: var(--pk-rest);
+}
+.pk-tab-ind.pk-live,
+.pk-seg-ind.pk-live {
+  background: var(--pk-lens);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), inset 0 1px 0.5px rgba(255, 255, 255, 0.5), 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+.pk-tab-ind.pk-drag,
+.pk-seg-ind.pk-drag {
+  translate: var(--pk-x, 0px) 0;
+  transition:
+    scale var(--dur-snap) var(--ease-snap),
+    background-color var(--dur-bloom) var(--ease-bloom),
+    box-shadow var(--dur-bloom) var(--ease-bloom);
+}
+.motion-reduced :is(.pk-tab-ind, .pk-seg-ind) {
+  scale: none;
+  transition: none;
+}
+/* (5) folded: the bar shrinks into a 50 pt pill at its left */
+.pk-tab-pill {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  color: var(--accent);
+  opacity: 0;
+  scale: 0.5;
+  pointer-events: none;
+  transition: scale var(--dur-gentle) var(--ease-gentle), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-dock.pk-folded .pk-tabbar {
+  scale: 0.16 0.78;
+  opacity: 0;
+  pointer-events: none;
+}
+.pk-dock.pk-folded .pk-tab-pill {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+/* (6) the search circle opens into a 50 pt field on the pill spring; ✕ closes it */
+.pk-search-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+}
+.pk-search-field {
+  position: absolute;
+  left: 0;
+  right: 58px;
+  top: 7px;
+  height: 50px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  color: var(--fg2);
+  opacity: 0;
+  scale: 0.3 1;
+  transform-origin: right center;
+  pointer-events: none;
+  touch-action: pan-y;
+  transition: scale var(--dur-pill) var(--ease-pill), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-search-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: 17px;
+  color: var(--fg);
+}
+.pk-search-close {
+  position: absolute;
+  right: 0;
+  top: 7px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  opacity: 0;
+  scale: 0.5;
+  pointer-events: none;
+  transition: scale var(--dur-pill) var(--ease-pill), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-dock .pk-tabbar,
+.pk-dock .pk-search-circle {
+  transition: scale var(--dur-pill) var(--ease-pill), opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-dock.pk-searching :is(.pk-search-field, .pk-search-close) {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+.pk-dock.pk-searching :is(.pk-tabbar, .pk-search-circle, .pk-tab-pill) {
+  opacity: 0;
+  scale: 0.8;
+  pointer-events: none;
+}
+
+/* (10) a pushed page slides in from the right while the page underneath moves a third left and dims */
+.pk-push {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: var(--bg);
+  overflow-y: auto;
+  translate: 100% 0;
+  box-shadow: var(--shadow-lifted);
+  touch-action: pan-y;
+  display: none;
+  transition: translate var(--dur-nav) var(--ease-nav);
+}
+.pk-push.pk-shown {
+  display: block;
+}
+.pk-push.pk-on {
+  translate: var(--pk-px, 0px) 0;
+}
+.pk-pushed-under {
+  translate: -33% 0;
+  transition: translate var(--dur-nav) var(--ease-nav);
+}
+.pk-pushed-back {
+  translate: 0 0;
+  transition: translate var(--dur-nav) var(--ease-nav);
+}
+.pk-tracking {
+  transition: none !important;
+}
+.pk-navdim {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  background: rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-nav) var(--ease-nav);
+}
+.pk-navdim.pk-on {
+  opacity: 1;
+}
+.motion-reduced .pk-pushed-under {
+  translate: none;
+}
+.motion-reduced .pk-push {
+  transition: translate 0s, opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-out);
+}
+
+/* (15) buttons on a bar: one glass capsule, the buttons inside only light up (never glass inside glass) */
+.pk-group {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+}
+.pk-group > .pk-btn {
+  width: 52px;
+  height: 44px;
+  border-radius: 999px;
+}
+.pk-group > .pk-btn[aria-pressed='true'] {
+  background: var(--pk-clear);
+}
+
+/* (17) edit button: Edit turns into Done and rows show their delete circles */
+.pk-edit-del {
+  flex: none;
+  width: 0;
+  overflow: hidden;
+  display: flex;
+  transition: width var(--dur-gentle) var(--ease-gentle);
+}
+.pk-editing .pk-edit-del {
+  width: 30px;
+}
+.pk-edit-del > i {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+}
+
+/* (18) chips: tap to pick; picked chips take the accent colour */
+.pk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pk-chip {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--fill);
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  transition:
+    background-color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out),
+    color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-chip.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.pk-chip.pk-chip-add {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--accent);
+}
+
+/* (19) badges: a count on a button, and a small word badge */
+.pk-badged {
+  position: relative;
+  display: inline-flex;
+}
+.pk-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  z-index: 25;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+.pk-tag {
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--tint);
+  color: var(--on-accent);
+  display: inline-flex;
+  align-items: center;
+}
+
 </style>
 <style id="gallery-css">
 /* The gallery's own page: everything here is the demo, not the kit. The parts themselves come from parts-kit.css. */
@@ -668,11 +1137,35 @@ body > .pk-layer {
 #app .gal-stage .gal-words b{color:rgba(0,0,0,.5);font-weight:800}
 #app .gal-stage.tall{min-height:170px}
 #app .gal-mat{width:120px;height:80px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px}
+
+/* small scrolling pages inside a part */
+#app .gal-mini{position:relative;height:250px;border-radius:22px;overflow:hidden;background:var(--bg);box-shadow:inset 0 0 0 .5px var(--sep)}
+#app .gal-mini .pk-topbar{height:76px;--pk-bar-top:6px}
+#app .gal-mini .pk-bar-slot.pk-left{left:8px}#app .gal-mini .pk-bar-slot.pk-right{right:8px}
+#app .gal-mini .pk-scroll{position:absolute;inset:0;overflow-y:auto;padding:52px 14px 20px}
+#app .gal-mini .gal-mlt{font-size:34px;font-weight:700;margin:0 0 10px}
+#app .gal-mrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:.5px solid var(--sep)}
+#app .gal-colorrow{height:64px;border-radius:14px;margin:0 0 10px;display:flex;align-items:center;padding:0 14px;color:#fff;font-weight:700;font-size:20px}
+#app .gal-tile{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+#app .gal-mbar{position:relative;width:100%;height:44px}
+#app .gal-mbar .pk-bar-slot{top:0}
+#app .gal-mbar .gal-ttl{position:absolute;left:60px;right:60px;top:0;height:44px;display:flex;align-items:center;justify-content:center;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.25)}
+#app .pk-ico{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+#app .gal-sq{width:44px;height:44px;border-radius:12px}
+#app .gal-pill132{width:132px;padding:0}
 </style>
 </head>
 <body>
 <div id="app" data-name="Parts gallery">
   <section class="gal-page pk-scroll" id="pg" data-name="Gallery page"><div class="gal-wrap" id="wrap"></div></section>
+  <section class="pk-push" id="push" data-under="#pg" data-name="10 · Pushed page">
+    <div class="pk-bar-slot pk-left"><button class="pk-btn pk-circle pk-glass pk-press" id="pushBack" data-name="Back button" aria-label="Back"></button></div>
+    <div style="padding:104px 16px 40px"><h1 class="pk-large-title">Pushed page</h1>
+    <p class="gal-sub">Swipe right from anywhere on this page, or tap Back.</p>
+    <div class="pk-list" style="margin-top:18px"><div class="pk-row"><span class="pk-row-text">The page underneath moved a third to the left and dimmed.</span></div><div class="pk-row"><span class="pk-row-text">Spring: ζ 0.86, 2.2 Hz (the nav spring).</span></div></div></div>
+  </section>
+  <header class="pk-topbar" id="topbar" data-name="2 · Top bar (this screen's)"><div class="pk-edge"></div><div class="pk-topbar-title">Parts</div><div class="pk-bar-slot pk-right"><button class="pk-btn pk-circle pk-glass pk-press" id="moreBtn" data-name="More button" aria-label="More"></button></div></header>
+  <div class="pk-dock" id="dock" data-name="4 · Tab bar (this screen's)"></div>
 </div>
 <script id="kit-js">
 /* Prototype kit 1.1.0 · MIT · https://github.com/imperialfox/prototype-kit
@@ -2607,6 +3100,381 @@ body > .pk-layer {
   window.addEventListener('pointerup', unpress);
   window.addEventListener('pointercancel', unpress);
 
+  /* ============================================================================================================
+     GLASS, BARS AND BUTTONS
+     ============================================================================================================ */
+
+  /* (2, 5) scrolling: the top bar's soft edge and small title, and (tabBar.fold, D01) the tab bar folding.
+     A .pk-scroll finds its .pk-topbar and .pk-dock beside it (the same parent), or by data-topbar / data-dock. */
+  const scrollRuns = new WeakMap();
+  function partner(sc, attr, cls) {
+    const id = sc.getAttribute(attr);
+    if (id) return doc.querySelector(id);
+    return sc.parentElement ? sc.parentElement.querySelector(':scope > ' + cls) : null;
+  }
+  function onScroll(sc) {
+    const y = sc.scrollTop;
+    const bar = partner(sc, 'data-topbar', '.pk-topbar');
+    if (bar) bar.classList.toggle('pk-scrolled', y > N.edge);
+    const dock = partner(sc, 'data-dock', '.pk-dock');
+    if (!dock || !S.tabBar.fold || !dock.querySelector('.pk-tab-pill')) return;
+    const st = scrollRuns.get(sc) || { last: y, run: 0 };
+    const d = y - st.last;
+    st.last = y;
+    if (sc.scrollHeight - sc.clientHeight > N.fold.extent) {
+      if (Math.sign(d) !== Math.sign(st.run)) st.run = 0;
+      st.run += d;
+      if (y <= 0) dock.classList.remove('pk-folded');
+      else if (st.run > N.fold.down) dock.classList.add('pk-folded');
+      else if (st.run < -N.fold.up) dock.classList.remove('pk-folded');
+    }
+    scrollRuns.set(sc, st);
+  }
+  doc.addEventListener('scroll', (ev) => {
+    const sc = ev.target;
+    if (sc && sc.classList && sc.classList.contains('pk-scroll')) onScroll(sc);
+  }, true);
+
+  /* (4, 23) indicator bars: the tab bar's highlight and the segmented control's knob, placed by --pk-i of --pk-n.
+     Tap or drag; the highlight swells into clear glass while pressed. (23) segmented.style 'squish' (D04's
+     alternative) slides and squishes on a tap instead, with no drag or swell. */
+  const BARS = '.pk-tabbar, .pk-seg';
+  const itemsOf = (bar) => $$(bar.classList.contains('pk-tabbar') ? ':scope > .pk-tab' : ':scope > button', bar);
+  const indOf = (bar) => bar.querySelector(':scope > .pk-tab-ind, :scope > .pk-seg-ind');
+  const squishy = (bar) => bar.classList.contains('pk-seg') && S.segmented.style === 'squish';
+  function refreshBar(bar) {
+    const its = itemsOf(bar);
+    if (!its.length) return;
+    let i = its.findIndex((t) => t.classList.contains('on'));
+    if (i < 0) {
+      i = 0;
+      its[0].classList.add('on');
+    }
+    bar.style.setProperty('--pk-n', its.length);
+    bar.style.setProperty('--pk-i', i);
+    its.forEach((t, j) => t.setAttribute(bar.classList.contains('pk-tabbar') ? 'aria-selected' : 'aria-pressed', String(j === i)));
+  }
+  function selectBar(bar, i, quiet) {
+    const its = itemsOf(bar);
+    if (!its[i]) return;
+    const was = its.findIndex((t) => t.classList.contains('on'));
+    its.forEach((t, j) => t.classList.toggle('on', j === i));
+    refreshBar(bar);
+    if (squishy(bar) && was !== i && motion.on()) {
+      const k = indOf(bar);
+      if (k) {
+        k.classList.remove('pk-squish');
+        void k.offsetWidth;
+        k.classList.add('pk-squish');
+        after(() => k.classList.remove('pk-squish'), dur('--dur-squish'));
+      }
+    }
+    if (!quiet && was !== i) emit(bar, 'change', { index: i, value: its[i].dataset.value || its[i].textContent.trim() });
+  }
+  let barDrag = null;
+  const nearestItem = (bar, cx) => {
+    let b = 0, bd = 1e9;
+    itemsOf(bar).forEach((t, i) => {
+      const d = Math.abs(t.offsetLeft + t.offsetWidth / 2 - cx);
+      if (d < bd) {
+        bd = d;
+        b = i;
+      }
+    });
+    return b;
+  };
+  const barX = (bar, ev) => (ev.clientX - bar.getBoundingClientRect().left) / scaleOf(bar);
+  function liveBar(bar, on) {
+    const k = indOf(bar);
+    if (!k) return;
+    const sw = on && !motion.reduced() && !squishy(bar);
+    k.classList.toggle('pk-live', sw);
+    if (sw) {
+      k.style.setProperty('--pk-bx', ((k.offsetWidth + N.bloom[0]) / k.offsetWidth).toFixed(3));
+      k.style.setProperty('--pk-by', ((k.offsetHeight + N.bloom[1]) / k.offsetHeight).toFixed(3));
+    } else {
+      k.style.removeProperty('--pk-bx');
+      k.style.removeProperty('--pk-by');
+    }
+  }
+  const under = (bar, i) => itemsOf(bar).forEach((t, j) => t.classList.toggle('pk-under', j === i && bar.classList.contains('pk-tabbar') && indOf(bar) && indOf(bar).classList.contains('pk-live')));
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const bar = ev.target.closest && ev.target.closest(BARS);
+    if (!bar || !indOf(bar)) return;
+    refreshBar(bar);
+    barDrag = { bar, id: ev.pointerId, x0: ev.clientX, moved: false, start: nearestItem(bar, barX(bar, ev)) };
+    try {
+      bar.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    liveBar(bar, true);
+    under(bar, barDrag.start);
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = barDrag;
+    if (!d || ev.pointerId !== d.id || squishy(d.bar)) return;
+    const bar = d.bar, s = scaleOf(bar);
+    if (!d.moved && Math.abs((ev.clientX - d.x0) / s) < N.tap) return;
+    d.moved = true;
+    const k = indOf(bar);
+    k.classList.add('pk-drag');
+    const cx = barX(bar, ev), w = k.offsetWidth, pad = parseFloat(getComputedStyle(bar).paddingLeft) || 0;
+    let x = cx - w / 2 - pad;
+    const max = bar.clientWidth - 2 * pad - w;
+    if (x < 0) x = -Math.min(0.3 * w, -x * 0.4);
+    if (x > max) x = max + Math.min(0.3 * w, (x - max) * 0.4);
+    k.style.setProperty('--pk-x', x.toFixed(1) + 'px');
+    under(bar, nearestItem(bar, cx));
+  });
+  function endBar(ev) {
+    const d = barDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    barDrag = null;
+    const bar = d.bar, k = indOf(bar);
+    const i = d.moved ? nearestItem(bar, barX(bar, ev)) : d.start;
+    k.classList.remove('pk-drag');
+    selectBar(bar, ev.type === 'pointercancel' && !d.moved ? itemsOf(bar).findIndex((t) => t.classList.contains('on')) : i);
+    under(bar, i);
+    later(() => {
+      if (barDrag && barDrag.bar === bar) return;
+      liveBar(bar, false);
+      under(bar, -1);
+    }, 300);
+  }
+  doc.addEventListener('pointerup', endBar);
+  doc.addEventListener('pointercancel', endBar);
+  // place every bar's highlight when it appears (screens drawn as HTML text need no call)
+  let refreshQueued = false;
+  function refreshAll() {
+    refreshQueued = false;
+    $$(BARS).forEach(refreshBar);
+    $$('.pk-switch').forEach((sw) => sw.setAttribute('aria-checked', String(sw.classList.contains('on'))));
+  }
+  const queueRefresh = () => {
+    if (!refreshQueued) {
+      refreshQueued = true;
+      requestAnimationFrame(refreshAll);
+    }
+  };
+  if (window.MutationObserver) new MutationObserver(queueRefresh).observe(doc.documentElement, { childList: true, subtree: true });
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', refreshAll);
+  else queueRefresh();
+
+  /* (5, 6) the dock: the folded pill opens the bar; the search circle opens the search field; ✕ closes it */
+  doc.addEventListener('click', (ev) => {
+    const t = ev.target.closest && ev.target.closest('.pk-tab-pill, .pk-search-circle, .pk-search-close');
+    if (!t) return;
+    const dock = t.closest('.pk-dock');
+    if (!dock) return;
+    if (t.classList.contains('pk-tab-pill')) return dock.classList.remove('pk-folded');
+    const on = t.classList.contains('pk-search-circle');
+    dock.classList.toggle('pk-searching', on);
+    const inp = dock.querySelector('.pk-search-field input');
+    if (inp) {
+      if (on) setTimeout(() => inp.focus({ preventScroll: true }), 60);
+      else {
+        inp.value = '';
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        inp.blur();
+      }
+    }
+    emit(dock, 'search', { open: on });
+  });
+
+  /* (10) pushed page: Parts.push(page, {under}) slides it in; swipe right from anywhere on it, or Parts.pop(page) */
+  const navDims = new WeakMap();
+  function underOf(page, o) {
+    const u = (o && o.under) || page.dataset.under;
+    if (u) return typeof u === 'string' ? doc.querySelector(u) : u;
+    return page.parentElement ? page.parentElement.querySelector(':scope > .pk-scroll') : null;
+  }
+  function navDim(page) {
+    let d = navDims.get(page);
+    if (!d || !d.isConnected) {
+      d = doc.createElement('div');
+      d.className = 'pk-navdim';
+      page.before(d);
+      navDims.set(page, d);
+    }
+    return d;
+  }
+  function push(page, o) {
+    const u = underOf(page, o);
+    page._pkUnder = u;
+    page.classList.add('pk-shown');
+    page.style.setProperty('--pk-px', '0px');
+    void page.offsetWidth;
+    page.classList.add('pk-on');
+    if (u) {
+      u.classList.remove('pk-pushed-back');
+      u.classList.add('pk-pushed-under');
+    }
+    navDim(page).classList.add('pk-on');
+    emit(page, 'push');
+  }
+  function pop(page) {
+    const u = page._pkUnder;
+    page.classList.remove('pk-on');
+    page.style.setProperty('--pk-px', '0px');
+    if (u) {
+      u.classList.remove('pk-pushed-under');
+      u.classList.add('pk-pushed-back');
+      u.style.removeProperty('translate');
+    }
+    navDim(page).classList.remove('pk-on');
+    after(() => {
+      if (page.classList.contains('pk-on')) return;
+      page.classList.remove('pk-shown');
+      if (u) u.classList.remove('pk-pushed-back');
+    }, motion.spring('nav'));
+    emit(page, 'pop');
+  }
+  let backDrag = null;
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const page = ev.target.closest && ev.target.closest('.pk-push.pk-on');
+    if (!page || ownedBy(ev.target, page) || ev.target.closest('button, a, .pk-hold')) return;
+    backDrag = { page, x: ev.clientX, y: ev.clientY, id: ev.pointerId, on: false, tr: tracker() };
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = backDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    const page = d.page, s = scaleOf(page), dx = (ev.clientX - d.x) / s, dy = (ev.clientY - d.y) / s;
+    if (!d.on) {
+      if (dx > 8 && Math.abs(dx) > Math.abs(dy)) {
+        d.on = true;
+        try {
+          page.setPointerCapture(ev.pointerId);
+        } catch (e) {}
+        page.classList.add('pk-tracking');
+        if (page._pkUnder) page._pkUnder.classList.add('pk-tracking');
+      } else if (Math.abs(dy) > 10) {
+        backDrag = null;
+        return;
+      } else return;
+    }
+    const W = page.offsetWidth, p = Math.max(0, dx);
+    page.style.setProperty('--pk-px', p + 'px');
+    if (page._pkUnder && !motion.reduced()) page._pkUnder.style.translate = (-33 + (33 * p) / W).toFixed(2) + '% 0';
+    navDim(page).style.opacity = String(1 - p / W);
+    d.tr.add(dx);
+  });
+  function endBack(ev) {
+    const d = backDrag;
+    if (!d || ev.pointerId !== d.id) return;
+    backDrag = null;
+    if (!d.on) return;
+    const page = d.page;
+    page.classList.remove('pk-tracking');
+    if (page._pkUnder) {
+      page._pkUnder.classList.remove('pk-tracking');
+      page._pkUnder.style.removeProperty('translate');
+    }
+    navDim(page).style.opacity = '';
+    const dx = parseFloat(page.style.getPropertyValue('--pk-px')) || 0;
+    if (dx > page.offsetWidth * N.back.distance || d.tr.v() > N.back.flick) pop(page);
+    else page.style.setProperty('--pk-px', '0px');
+  }
+  doc.addEventListener('pointerup', endBack);
+  doc.addEventListener('pointercancel', endBack);
+
+  /* (11) top bar buttons changing between pages (measured): Parts.bar.swap(button, iconHTML) blurs the old icon out
+     (σ 6) and the new one in (σ 3.5) while the circle swells up to 22%; Parts.bar.appear(slot, html) and
+     Parts.bar.leave(slot) add or take away a button (250 ms in, 350 ms out). Reduce Motion: a short cross-fade. */
+  const bar = {
+    swap(btn, iconHTML) {
+      const old = btn.querySelector(':scope > .pk-ico');
+      const nu = doc.createElement('span');
+      nu.className = 'pk-ico';
+      nu.innerHTML = iconHTML;
+      btn.append(nu);
+      const T = dur('--dur-morph');
+      if (!old) return;
+      if (!motion.on() || !T) {
+        if (motion.reduced() && T) {
+          old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur('--dur-reduced'), fill: 'forwards' }).onfinish = () => old.remove();
+          nu.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-reduced') });
+        } else old.remove();
+        return;
+      }
+      old.animate([{ opacity: 1, filter: 'blur(0px)' }, { opacity: 0, filter: 'blur(6px)' }], { duration: T * 0.42, easing: 'linear', fill: 'forwards' }).onfinish = () => old.remove();
+      nu.animate([{ opacity: 0, filter: 'blur(3.5px)' }, { opacity: 0, filter: 'blur(3.5px)', offset: 0.25 }, { opacity: 1, filter: 'blur(0px)' }], { duration: T * 0.84, easing: ease('--ease-out') });
+      btn.animate([{ scale: '1' }, { scale: '1.22', offset: 0.6 }, { scale: '0.98', offset: 0.85 }, { scale: '1' }], { duration: T, easing: ease('--ease-out'), composite: 'add' });
+    },
+    appear(slot, buttonHTML) {
+      slot.insertAdjacentHTML('beforeend', buttonHTML);
+      const b = slot.lastElementChild;
+      return appearAs(b, 1.1, true);
+    },
+    leave(slot, btn) {
+      const b = btn || slot.lastElementChild;
+      if (!b) return Promise.resolve();
+      return leaveAs(b, true);
+    },
+  };
+  // the materialize choreography (M): in over 250 ms (glass full at 92%, content sharpening from an 8 px blur over
+  // the last 65%, scale from 1.15, or 1.1 inside a bar); out over 350 ms (content gone by 55%, then the empty glass)
+  function appearAs(el, from, force) {
+    const T = dur('--dur-appear');
+    if (!force && !motion.on()) return Promise.resolve();
+    if (!T) return Promise.resolve();
+    if (motion.reduced()) return el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-reduced') }).finished.catch(() => {});
+    const inner = el.querySelector('svg, .pk-ico, span');
+    if (inner) inner.animate([{ opacity: 0, filter: 'blur(8px)' }, { opacity: 0, filter: 'blur(8px)', offset: 0.35 }, { opacity: 1, filter: 'blur(0px)' }], { duration: T, easing: 'linear' });
+    return el.animate([{ scale: String(from), opacity: 0 }, { scale: '1', opacity: 1, offset: 0.92 }, { scale: '1', opacity: 1 }], { duration: T, easing: 'linear' }).finished.catch(() => {});
+  }
+  function leaveAs(el) {
+    const T = dur('--dur-leave');
+    const done = () => el.remove();
+    if (!T) {
+      done();
+      return Promise.resolve();
+    }
+    if (motion.reduced()) {
+      const a = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur('--dur-reduced'), fill: 'forwards' });
+      return a.finished.then(done, done);
+    }
+    const inner = el.querySelector('svg, .pk-ico, span');
+    if (inner) inner.animate([{ opacity: 1, filter: 'blur(0px)' }, { opacity: 0, filter: 'blur(8px)', offset: 0.55 }, { opacity: 0, filter: 'blur(8px)' }], { duration: T, easing: 'linear', fill: 'forwards' });
+    const a = el.animate([{ scale: '1', opacity: 1 }, { scale: '1.15', opacity: 0 }], { duration: T, easing: 'linear', fill: 'forwards' });
+    return a.finished.then(done, done);
+  }
+
+  /* (15) buttons on a bar that toggle (.pk-group.pk-toggles): aria-pressed, and a pk:change */
+  doc.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.pk-group.pk-toggles > .pk-btn');
+    if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    emit(b, 'change', { on });
+  });
+
+  /* (17) edit button: data-pk-edit="#list" (or the list it's in) toggles .pk-editing; its label becomes Done */
+  doc.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('[data-pk-edit]');
+    if (!b) return;
+    const sel = b.getAttribute('data-pk-edit');
+    const list = (sel && doc.querySelector(sel)) || b.closest('.pk-list');
+    if (!list) return;
+    const on = !list.classList.contains('pk-editing');
+    list.classList.toggle('pk-editing', on);
+    if (!b.dataset.pkLabel) b.dataset.pkLabel = b.textContent.trim();
+    b.textContent = on ? b.dataset.done || 'Done' : b.dataset.pkLabel;
+    b.style.fontWeight = on ? '600' : '';
+    if (motion.on()) b.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-fade') });
+    emit(list, 'edit', { on });
+  });
+
+  /* (18) chips: a tap picks or unpicks (not the "+ Your own" chip, and not in a .pk-chips.pk-static) */
+  doc.addEventListener('click', (ev) => {
+    const c = ev.target.closest && ev.target.closest('.pk-chip');
+    if (!c || c.classList.contains('pk-chip-add') || c.closest('.pk-static')) return;
+    const on = !c.classList.contains('on');
+    c.classList.toggle('on', on);
+    c.setAttribute('aria-pressed', String(on));
+    emit(c, 'change', { on });
+  });
+
   /* ==PARTS== (each group below adds its part) */
 
   /* ============================================================================================================
@@ -2631,6 +3499,13 @@ body > .pk-layer {
     own: () => S.own,
     layer,
     rel,
+    refresh: refreshAll,
+    select: (barEl, i) => selectBar(barEl, i, true),
+    push,
+    pop,
+    bar,
+    appear: (el, o) => (allowed(S.glass.appear, o && o.key) ? appearAs(el, (o && o.from) || 1.15) : Promise.resolve()),
+    leave: (el, o) => (allowed(S.glass.appear, o && o.key) ? leaveAs(el) : (el.remove(), Promise.resolve())),
   };
   Object.assign(Parts, window.__pkParts || {});
   window.Parts = Parts;
@@ -2684,10 +3559,96 @@ let H = `<div data-name="Header"><h1 class="pk-large-title" data-name="Large tit
 <div class="gal-legend"><span class="gal-src m">Measured</span><span class="gal-src mx">Partly measured</span><span class="gal-src e">By eye</span><span class="gal-src pin">Pinned</span></div>
 <p class="gal-pv" style="margin:6px 4px 0">Measured = timed against a real iPhone by the authors of liquid_glass_widgets. By eye = their tuning. Pinned = built and ready, switched off in an app until it's placed. The controls panel switches each setting both ways.</p></div>`;
 
+
+const tabsHTML = (tabs, on) => `<nav class="pk-tabbar pk-glass" data-name="Tab bar"><span class="pk-tab-ind" data-name="Picked tab highlight"></span>${tabs.map((t, i) => `<button class="pk-tab${i === (on || 0) ? ' on' : ''}" data-name="Tab: ${t[1]}">${ic(t[0], 24)}<span>${t[1]}</span></button>`).join('')}</nav>`;
+const searchHTML = (ph, id) => `<button class="pk-btn pk-search-circle pk-glass pk-press" data-name="Search circle" aria-label="Search">${ic('search', 24)}</button>
+  <div class="pk-search-field pk-glass" data-name="Search field">${ic('search', 18)}<input ${id ? `id="${id}"` : ''} placeholder="${ph}" aria-label="${ph}"></div><button class="pk-btn pk-search-close pk-glass pk-press" data-name="Close search" aria-label="Close search">${ic('x', 18)}</button>`;
+const TABS = [['layers', 'Bars'], ['sliders', 'Controls'], ['list', 'Lists'], ['copy', 'Overlays']];
+const row = (title, sub, tile, extra, tag) => { tag = tag || 'div'; return `<${tag} class="pk-row${tag === 'button' ? ' pk-tap' : ''}" data-name="Row: ${title}">${tile ? `<span class="pk-tile" style="background:${tile[1]}">${ic(tile[0], 20)}</span>` : ''}<span class="pk-row-text">${title}${sub ? `<small>${sub}</small>` : ''}</span>${extra || ''}</${tag}>`; };
+const chev = `<span class="pk-chev">${ic('chevR', 18)}</span>`;
+
+H += sec('glass', 'Glass');
+H += part(1, 'Glass material', 'm', 'Regular: tint 53% light / 12% dark, saturation 2.1 / 1.4, blur 14. Rim lit from the top in light, from the bottom in dark; shadow only in light. Strong is for sheets. Clear is glass inside glass: a see-through fill with the rim and no second blur. Reduce transparency (controls) makes the tint more solid and keeps the blur. <code>.pk-glass</code> <code>.pk-strong</code> <code>.pk-clear</code>',
+  stage(`<div class="pk-glass gal-mat" data-name="Regular glass">Regular</div><div class="pk-glass pk-strong gal-mat" data-name="Strong glass">Strong</div><div class="pk-glass gal-mat" style="display:flex;flex-direction:column;gap:6px" data-name="Glass holding clear glass">Holder<span class="pk-clear" style="border-radius:999px;padding:4px 12px;font-size:13px" data-name="Clear glass">Clear</span></div>`, 'tall'));
+
+H += sec('bars', 'Bars');
+H += part(2, 'Top bar and soft edge', 'e', 'No card of its own. After 36 pt of scrolling the soft edge (51) fades in (100 pt, fade 1 · .70 · .30 · .04 · 0) with the small title. Circle buttons 44 pt. Scroll inside the box. <code>.pk-topbar</code> beside a <code>.pk-scroll</code>',
+  `<div class="gal-mini" data-name="Small scrolling page"><header class="pk-topbar" data-name="Top bar"><div class="pk-edge"></div><div class="pk-bar-slot pk-left"><button class="pk-btn pk-circle pk-glass pk-press" data-name="Back button" aria-label="Back">${ic('chevL')}</button></div><div class="pk-topbar-title">Library</div><div class="pk-bar-slot pk-right"><button class="pk-btn pk-circle pk-glass pk-press" data-name="More button" aria-label="More">${ic('more')}</button></div></header>
+  <div class="pk-scroll"><div class="gal-mlt">Library</div>${['Morning notes', 'Weekly plan', 'Recipes', 'Reading list', 'Ideas', 'Travel', 'Receipts', 'Workouts', 'Films', 'Gifts'].map((t, i) => `<div class="gal-mrow"><span class="gal-tile" style="background:var(--sys-${['blue', 'orange', 'green', 'purple', 'pink', 'teal', 'indigo', 'red', 'mint', 'yellow'][i]})">${ic(['note', 'cal', 'book', 'star', 'heart', 'flag', 'copy', 'clock', 'play', 'bell'][i], 18)}</span>${t}</div>`).join('')}</div></div>`);
+H += part(51, 'Soft edge under bars', 'e', 'Soft (what iOS mostly uses): the page colour fading out, not a blur. Blur: three stacked blurs, strongest at the top (σ 18 → 6 → 2). Bottom edges are 60 pt. Scroll the box, then switch. <code>.pk-edge</code> <code>.pk-edge-blur</code> <code>.pk-edge-bottom</code>',
+  `<div class="pk-seg" id="edgeSeg" style="margin-bottom:10px" data-name="Segmented: Soft Blur"><span class="pk-seg-ind"></span><button class="on">Soft</button><button>Blur</button></div>
+  <div class="gal-mini" id="edgeMini" data-name="Soft edge sample"><header class="pk-topbar pk-edge-on" style="height:100px" data-name="Top bar"><div class="pk-edge"></div><div class="pk-edge-blur" style="display:none"><i></i><i></i><i></i></div><div class="pk-topbar-title" style="opacity:1">Photos</div></header>
+  <div class="pk-scroll" style="padding-top:60px">${[['Sunrise', '#ff9f0a'], ['Ocean', '#0a84ff'], ['Forest', '#30d158'], ['Berry', '#ff375f'], ['Dusk', '#5e5ce6'], ['Sand', '#c69c6d'], ['Mint', '#00c7be']].map(c => `<div class="gal-colorrow" style="background:${c[1]}">${c[0]}</div>`).join('')}</div><div class="pk-edge-bottom"></div></div>`);
+H += part(3, 'Large title', 'e', 'Large title 34 pt bold with a Footnote date line above. Folds into the 17 pt title in the top bar. <code>.pk-large-title</code> <code>.pk-date-line</code>',
+  `<div class="pk-list" style="padding:14px 16px" data-name="Title block"><div class="pk-date-line">Monday 2 November</div><div class="pk-large-title" style="display:flex;align-items:center;gap:6px">Today<span style="color:var(--fg3)">${ic('chevR', 22, 2.6)}</span></div></div>`);
+H += part(4, 'Tab bar', 'e', '64 pt capsule. The picked tab sits on a flat 10% fill; pressed, it turns to clear glass and grows 12 × 8 pt, and its icon to ×1.15. Drag along to switch; it settles on a 350 ms spring. This screen\'s own bar works the same. <code>.pk-tabbar</code> in a <code>.pk-dock</code>',
+  stage(`<div class="pk-dock pk-inline" data-name="Dock">${tabsHTML([['home', 'Home'], ['grid', 'Browse'], ['book', 'Library'], ['person', 'Profile']])}</div>`));
+H += part(5, 'Tab bar, folded away', 'e', 'Off by default (decision D01: never folds). With <code>tabBar.fold</code> on, the bar folds into a 50 pt pill after 20 pt of scrolling down and opens after 12 pt up (switch it on in the controls, then scroll this page). Here: tap Fold, then the pill.',
+  stage(`<div class="gal-col"><div class="pk-dock pk-inline" id="foldDemo" data-name="Dock">${tabsHTML([['home', 'Home'], ['grid', 'Browse'], ['book', 'Library']])}<button class="pk-btn pk-tab-pill pk-glass pk-press" data-name="Folded pill" aria-label="Open the tab bar">${ic('home')}</button></div><button class="pk-btn pk-pill pk-glass pk-press" id="foldBtn" data-name="Button: Fold">Fold</button></div>`, 'tall'));
+H += part(6, 'Tab bar with search', 'e', 'A search circle 8 pt from the bar (<code>tabBar.searchGap</code>, D02). It opens into a 50 pt search field on a 336 ms spring; ✕ closes it.',
+  stage(`<div class="pk-dock pk-inline" data-name="Dock">${tabsHTML([['home', 'Home'], ['grid', 'Browse'], ['book', 'Library']])}${searchHTML('Search')}</div>`));
+H += part(10, 'Pushed page', 'e', 'Slides in from the right while the page underneath moves a third left and dims. Swipe back from anywhere on it. <code>Parts.push(page)</code> <code>Parts.pop(page)</code>',
+  `<div class="pk-list">${row('Open a pushed page', '', null, chev, 'button').replace('data-name', 'id="pushOpen" data-name')}</div>`);
+H += part(11, 'Top bar buttons changing', 'm', 'Old icon blurs out (σ 6), the new one blurs in (σ 3.5), and the circle swells up to 22%. A button appearing takes 250 ms; leaving takes 350 ms. <code>Parts.bar.swap</code> <code>.appear</code> <code>.leave</code>',
+  stage(`<div class="gal-col"><div class="gal-mbar" data-name="Sample top bar"><div class="pk-bar-slot pk-left" id="mbL"></div><div class="gal-ttl" id="mbT">Home</div><div class="pk-bar-slot pk-right"><button class="pk-btn pk-circle pk-glass pk-press" id="mbR" data-name="Right button" aria-label="Add"><span class="pk-ico">${ic('plus')}</span></button></div></div>
+  <button class="pk-btn pk-pill pk-glass pk-press" id="mbGo" data-name="Button: Next page">Next page</button></div>`, 'tall'));
+
+H += sec('buttons', 'Buttons');
+H += part(12, 'Glass button', 'm', 'Grows 17 pt along its longest side (44 pt circle ×1.39, 56 pt ×1.30, 132 pt pill ×1.13), from the centre. Lights up 30% white in light, 14% in dark: in 150 ms, out 60 ms. Up in about 150 ms, then one small dip on release. <code>.pk-glass .pk-press</code>',
+  stage(`<button class="pk-btn pk-circle pk-glass pk-press" data-name="Glass circle: plus" aria-label="Add">${ic('plus')}</button><button class="pk-btn pk-circle pk-glass pk-press" data-name="Glass circle: heart" aria-label="Favourite">${ic('heart')}</button><button class="pk-btn pk-circle pk-lg pk-glass pk-press" data-name="Glass circle 56: mic" aria-label="Record">${ic('mic', 26)}</button><button class="pk-btn pk-pill gal-pill132 pk-glass pk-press" data-name="Glass pill 132">Continue</button>`, 'tall'));
+H += part(13, 'Prominent button', 'e', 'Tinted with the accent colour, white label. Same press. <code>.pk-tinted</code>',
+  stage(`<button class="pk-btn pk-cta pk-glass pk-tinted pk-press" data-name="Prominent capsule">Start</button><button class="pk-btn pk-circle pk-glass pk-tinted pk-press" data-name="Prominent circle" aria-label="Play">${ic('play', 20)}</button>`));
+H += part(14, 'Solid press', 'e', 'Solid buttons (not glass) shrink to <code>--press</code> (0.93) instead of growing: the main start button, solid circles and pills. <code>.pk-press-solid</code>',
+  `<div class="gal-row"><button class="pk-btn pk-cta pk-solid pk-press-solid" data-name="Solid capsule">Start session</button>${['star', 'bell'].map(n => `<button class="pk-btn gal-sq pk-press-solid" style="background:var(--fill)" data-name="Solid square: ${n}" aria-label="${n}">${ic(n)}</button>`).join('')}</div>`);
+H += part(15, 'Buttons on a bar', 'e', 'One glass capsule; the buttons inside only light up and have no glass of their own (never glass inside glass). <code>.pk-group</code> with <code>.pk-press-bar</code> buttons',
+  stage(`<div class="pk-group pk-glass pk-toggles" data-name="Group">${['bold', 'italic', 'under'].map((n, i) => `<button class="pk-btn pk-press-bar" data-name="Group button: ${n}" aria-label="${n}" aria-pressed="${i === 0}">${ic(n, 20, 2.4)}</button>`).join('')}</div>`));
+H += part(16, 'Pull-down button', 'e', 'The menu grows out of the button\'s corner (open spring ζ 0.73, close ζ 0.74). Its blur fades in over 260 ms and stays while it closes. One menu style everywhere: blur 22 over an 80% fill, corners 20 (D16). <code>Parts.menu(button, items)</code>',
+  stage(`<button class="pk-btn pk-pill pk-glass pk-press" id="pullBtn" data-name="Pull-down button">Sort ${ic('chevD', 18)}</button>`));
+H += part(17, 'Edit button', 'e', 'Edit turns into Done; rows show delete circles. <code>data-pk-edit</code>',
+  `<div class="pk-list" id="editList" data-name="Editable list"><div class="pk-row" data-name="List header"><span class="pk-row-text" style="font-weight:600">Favourites</span><button class="pk-btn pk-text" data-pk-edit="#editList" data-name="Edit button">Edit</button></div>${['Morning notes', 'Weekly plan', 'Recipes'].map(t => `<div class="pk-row" data-name="Row: ${t}"><span class="pk-edit-del"><i>${ic('minus', 14, 3)}</i></span><span class="pk-row-text">${t}</span></div>`).join('')}</div>`);
+H += part(18, 'Chips', 'e', 'Tap to pick. Picked chips take the accent colour. <code>.pk-chip</code>',
+  `<div class="pk-chips" data-name="Chips">${['Calm', 'Focused', 'Tired', 'Energised', 'Rushed'].map((t, i) => `<button class="pk-chip${i === 1 ? ' on' : ''}" data-name="Chip: ${t}">${t}</button>`).join('')}<button class="pk-chip pk-chip-add" data-name="Chip: Your own">+ Your own</button></div>`);
+H += part(19, 'Badges', 'e', 'A count on a button, and a small word badge. <code>.pk-badge</code> <code>.pk-tag</code>',
+  stage(`<span class="pk-badged"><button class="pk-btn pk-circle pk-glass pk-press" data-name="Button with count" aria-label="Notifications">${ic('bell')}</button><span class="pk-badge" data-name="Count badge">3</span></span><span class="pk-tag" data-name="Word badge">New</span>`));
+
 /* ==SECTIONS== */
 
 H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in 1.0: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
 $('#wrap').innerHTML = H;
+
+
+/* ---------- this screen: dock, top bar, section tabs, search ---------- */
+const pg = $('#pg');
+$('#dock').innerHTML = `${tabsHTML(TABS)}<button class="pk-btn pk-tab-pill pk-glass pk-press" id="mainPill" data-name="Folded pill" aria-label="Open the tab bar">${ic('layers')}</button>${searchHTML('Find a part', 'findIn')}`;
+$('#moreBtn').innerHTML = ic('more');
+$('#pushBack').innerHTML = ic('chevL');
+const mainTb = $('#dock .pk-tabbar');
+const TABSEC = [['glass', 'bars', 'buttons'], ['controls', 'inputs'], ['lists'], ['overlays', 'effects']];
+const TABICON = ['layers', 'sliders', 'list', 'copy'];
+let lockTab = 0;
+mainTb.addEventListener('pk:change', e => { lockTab = Date.now() + 900; const first = $('#s-' + TABSEC[e.detail.index][0]); if (first) pg.scrollTo({ top: Math.max(0, first.offsetTop - 96), behavior: Parts.motion.on() ? 'smooth' : 'auto' }); $('#mainPill').innerHTML = ic(TABICON[e.detail.index]); });
+pg.addEventListener('scroll', () => {
+  if (Date.now() < lockTab) return; let t = 0; TABSEC.forEach((ids, i) => { const el = $('#s-' + ids[0]); if (el && el.offsetTop - 140 <= pg.scrollTop) t = i; });
+  const cur = [...mainTb.querySelectorAll('.pk-tab')].findIndex(x => x.classList.contains('on')); if (t !== cur) { Parts.select(mainTb, t); $('#mainPill').innerHTML = ic(TABICON[t]); }
+}, { passive: true });
+function filter(q) { q = q.trim().toLowerCase(); let any = 0;
+  $$('.gal-part').forEach(p => { const hit = !q || p.dataset.q.includes(q); p.style.display = hit ? '' : 'none'; if (hit) any++; });
+  $$('.gal-sh').forEach(h => { let n = h.nextElementSibling, vis = false; while (n && !n.classList.contains('gal-sh')) { if (n.classList.contains('gal-part') && n.style.display !== 'none') vis = true; n = n.nextElementSibling; } h.style.display = vis ? '' : 'none'; });
+  $('#empty').style.display = any ? 'none' : 'block'; if (q) pg.scrollTop = 0; }
+$('#findIn').addEventListener('input', e => filter(e.target.value));
+
+/* ---------- demos: bars ---------- */
+$('#edgeSeg').addEventListener('pk:change', e => { const b = e.detail.index === 1; $('#edgeMini .pk-edge').style.display = b ? 'none' : ''; $('#edgeMini .pk-edge-blur').style.display = b ? '' : 'none'; });
+$('#foldBtn').addEventListener('click', () => { const d = $('#foldDemo'), m = !d.classList.contains('pk-folded'); d.classList.toggle('pk-folded', m); $('#foldBtn').textContent = m ? 'Open' : 'Fold'; });
+$('#foldDemo').addEventListener('click', e => { if (e.target.closest('.pk-tab-pill')) $('#foldBtn').textContent = 'Fold'; });
+$('#pushOpen').addEventListener('click', () => Parts.push($('#push')));
+$('#pushBack').addEventListener('click', () => Parts.pop($('#push')));
+(() => { let st = 0; const L = $('#mbL'), R = $('#mbR'), T = $('#mbT');
+  $('#mbGo').addEventListener('click', () => { st = 1 - st; T.textContent = st ? 'Details' : 'Home';
+    if (st) Parts.bar.appear(L, `<button class="pk-btn pk-circle pk-glass pk-press" data-name="Back button" aria-label="Back">${ic('chevL')}</button>`); else Parts.bar.leave(L);
+    Parts.bar.swap(R, ic(st ? 'more' : 'plus')); $('#mbGo').textContent = st ? 'Go back' : 'Next page'; }); })();
+$('#pullBtn').addEventListener('click', () => { if (Parts.menu) Parts.menu($('#pullBtn'), [{ label: 'Name', icon: ic('check', 18) }, { label: 'Date added' }, { label: 'Last opened' }, '-', { label: 'Ascending', icon: ic('chevD', 18) }], { onPick: it => Parts.toast && Parts.toast(it.label) }); });
+$('#moreBtn').addEventListener('click', () => { if (Parts.menu) Parts.menu($('#moreBtn'), [{ label: 'Expand all', icon: ic('list', 18) }, { label: 'Collapse all', icon: ic('minus', 18) }, '-', { label: 'About these parts', icon: ic('star', 18) }], { onPick: it => Parts.toast && Parts.toast(it.label) }); });
 
 /* ==BEHAVIOUR== */
 
@@ -2707,10 +3668,12 @@ const settingControls = [
 ];
 window.Kit.start({ app: 'Parts kit', title: 'parts gallery', id: 'parts-gallery-v1', screen: '', version: '2', controls: settingControls });
 // the prototype kit's Look and Motion drive the parts kit
+let seen = {};
 function follow(d) {
   if (!d) return;
   const dark = d.look === 1; app.classList.toggle('pk-dark', dark); app.classList.toggle('pk-light', !dark);
-  Parts.motion.setSpeed(d.motion === 1 ? 4 : 1); Parts.motion.setReduced(d.motion === 2);
+  if (d.motion !== seen.motion) { Parts.motion.setSpeed(d.motion === 1 ? 4 : 1); Parts.motion.setReduced(d.motion === 2); }
+  seen = d;
 }
 window.addEventListener('kit:change', e => follow(e.detail));
 follow(window.Kit.get && window.Kit.get());

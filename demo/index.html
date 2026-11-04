@@ -59,6 +59,10 @@
 #app .pk-ico{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 #app .gal-sq{width:44px;height:44px;border-radius:12px}
 #app .gal-pill132{width:132px;padding:0}
+/* iPad: the dock centred, the top bar's buttons further in (as an app would set for itself) */
+.is-ipad #app{--pk-bar-top:40px}
+.is-ipad #app #dock{left:50%;right:auto;width:520px;margin-left:-260px;bottom:24px}
+.is-ipad #app #topbar .pk-bar-slot.pk-right{right:40px}
 #app .gal-pad{width:220px;height:72px;border-radius:999px;font-weight:600;touch-action:none}
 #app .gal-mz{width:64px;height:64px}
 #app .gal-mzslot{width:64px;height:64px}

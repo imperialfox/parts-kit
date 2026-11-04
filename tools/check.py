@@ -613,6 +613,34 @@ def pinned(page):
     ok(r["g"] == "0" and r["tx"] == "", f"D13 off: no glint and no lean ({r})")
 
 
+@behaviour
+def settings_both_ways(page):
+    page.evaluate("Parts.motion.setSpeed(0)")
+    # sheet lists: a name not listed gets no stops, can't grow and isn't a cover
+    r = page.evaluate("""(() => { const a = Parts.sheet({ key: 'other', html: '<p>x</p>' }); const g = a.grow(); const st = a.stop; const cov = !!document.querySelector('.pk-cover'); a.close();
+      const b = Parts.sheet({ key: 'grows', html: '<p>x</p>' }); const g2 = b.grow(); b.close(); return { g, st, cov, g2 }; })()""")
+    ok(r == {"g": False, "st": "fit", "cov": False, "g2": True}, f"D09/D10: only listed sheets get stops, grow or open as covers ({r})")
+    # timing.hold: a shorter hold opens the menu sooner
+    page.evaluate("Parts.settings({ timing: { hold: 300 } })")
+    scroll_to(page, "#p46")
+    x, y = center(page, "#ctxList .pk-hold >> nth=0")
+    page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(420)
+    early = page.evaluate("!!document.querySelector('.pk-menu')")
+    page.mouse.up()
+    page.evaluate("Parts.closeAll(); Parts.settings({ timing: { hold: 700 } })")
+    ok(early, "timing.hold: the hold time is one number")
+    # Reduce Motion: no movement (no press growth), fades only
+    page.evaluate("Kit.set('Motion', 2)")
+    scroll_to(page, "#p12")
+    x, y = center(page, "#p12 .pk-circle")
+    page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(30)
+    sc = page.evaluate("getComputedStyle(document.querySelector('#p12 .pk-circle')).scale")
+    page.mouse.up()
+    ok(sc in ("none", "1"), f"Reduce Motion: glass buttons don't grow ({sc})")
+    ok(page.evaluate("document.documentElement.classList.contains('motion-reduced')"), "Reduce Motion: html.motion-reduced is set")
+    page.evaluate("Kit.set('Motion', 0)")
+
+
 def main():
     shots = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else KIT / "shots").resolve()
     shots.mkdir(parents=True, exist_ok=True)

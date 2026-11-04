@@ -57,6 +57,9 @@ Any app change; new or "Later" parts; per-screen motion settings; the prototype 
 5. **For an element, `differences()` compares with the value around it** (its parent), so an element inside an app-wide difference only lists what it changes itself.
 6. **With `motion: 'app'`**, the app's MOTION still decides the springs it has; a `springs` line for one of those shows in `differences()` but the app's numbers win. Ivan's apps use `motion: 'kit'`.
 
+- The Parts gallery (artifact `174c215e-…`) republished on 1.1 as version `1793787566-80d8`; its page id is unchanged, so notes keep their place.
+- **Build receipt:** Parts kit 1.1 · L–M → L–M · 48 steps · 53k written · 11.4M re-read · 3 full test runs (also in `BUILD_RECEIPTS.md`).
+
 **What's left**
 - Q41 · Interface: Parts Kit Move can now pin 1.1.0 (after Q38 and Q39).
 - The prototype kit, the Atlas kit and `SHARED.md` are still on Ivan's to-do list.

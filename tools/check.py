@@ -401,6 +401,39 @@ def controls_and_inputs(page):
     ok(h1 > h0, f"29: the text area grows as you type ({h0} → {h1})")
 
 
+@behaviour
+def lists(page):
+    page.evaluate("Parts.motion.setSpeed(0)")
+    scroll_to(page, "#p35")
+    x, y = center(page, "#p35 .pk-row")
+    page.mouse.move(x, y); page.mouse.down()
+    r = page.evaluate("(() => { const s = getComputedStyle(document.querySelector('#p35 .pk-row')); return { bg: s.backgroundColor, sc: s.scale }; })()")
+    page.mouse.up()
+    page.evaluate("Kit.set('Row press (D06)', 1)")
+    page.mouse.move(x, y); page.mouse.down()
+    r2 = page.evaluate("(() => { const s = getComputedStyle(document.querySelector('#p35 .pk-row')); return { bg: s.backgroundColor, sc: s.scale }; })()")
+    page.mouse.up()
+    page.evaluate("Kit.set('Row press (D06)', 0)")
+    ok(r["sc"] in ("none", "1") and r["bg"] == "rgb(209, 209, 214)", f"35/D06: a pressed row highlights and doesn't shrink ({r})")
+    ok(r2["sc"] == "0.98" and r2["bg"] == "rgb(255, 255, 255)", f"35/D06: with row.press 'shrink' it shrinks to 0.98 instead ({r2})")
+    # 39 swipe a row open, then tap elsewhere to close it
+    scroll_to(page, "#p39")
+    b = page.locator("#p39 .pk-swipe-front").nth(1).bounding_box()
+    drag(page, b["x"] + b["width"] - 20, b["y"] + 25, b["x"] + b["width"] - 200, b["y"] + 27, steps=12)
+    sx = page.evaluate("document.querySelectorAll('#p39 .pk-swipe-front')[1].style.getPropertyValue('--pk-sx')")
+    ok(sx == "-176px" and page.evaluate("document.querySelectorAll('#p39 .pk-swipe')[1].classList.contains('pk-show')"), f"39: swiping left opens Flag and Delete ({sx})")
+    page.mouse.click(b["x"] + 40, b["y"] - 80)
+    page.wait_for_timeout(50)
+    ok(page.evaluate("document.querySelectorAll('#p39 .pk-swipe-front')[1].style.getPropertyValue('--pk-sx')") == "0px", "39: tapping elsewhere closes it")
+    # 40 reorder: drag Warm up below Cool down
+    scroll_to(page, "#p40")
+    g = page.locator("#reo .pk-grip").nth(0).bounding_box()
+    h = page.locator("#reo .pk-row").nth(0).bounding_box()["height"]
+    drag(page, g["x"] + 10, g["y"] + 10, g["x"] + 10, g["y"] + 10 + h * 2.1, steps=14)
+    order = page.evaluate("[...document.querySelectorAll('#reo .pk-row-text')].map(x => x.textContent)")
+    ok(order == ["Main set", "Cool down", "Warm up", "Stretch"], f"40: holding the handle and dragging reorders ({order})")
+
+
 def main():
     shots = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else KIT / "shots").resolve()
     shots.mkdir(parents=True, exist_ok=True)

@@ -1040,6 +1040,171 @@
   doc.addEventListener('pointerup', endStretch);
   doc.addEventListener('pointercancel', endStretch);
 
+  /* ============================================================================================================
+     LISTS
+     ============================================================================================================ */
+
+  /* (35) row press: rows that do something (button, link or .pk-tap) highlight while pressed (D06), or shrink with
+     row.press 'shrink'. Moving more than 10 pt (a scroll) lets go. */
+  let rowPress = null;
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const row = ev.target.closest && ev.target.closest('button.pk-row, a.pk-row, .pk-row.pk-tap');
+    if (!row) return;
+    const inner = ev.target.closest('button, a, input, textarea, select, .pk-switch, .pk-slider, .pk-seg, .pk-stepper, [data-own-gesture]');
+    if (inner && inner !== row) return;
+    rowPress = { row, x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+    row.classList.add('pk-pressed');
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = rowPress;
+    if (!d || ev.pointerId !== d.id) return;
+    const s = scaleOf(d.row);
+    if (Math.hypot((ev.clientX - d.x) / s, (ev.clientY - d.y) / s) > N.holdMove) {
+      d.row.classList.remove('pk-pressed');
+      rowPress = null;
+    }
+  });
+  const endRow = (ev) => {
+    if (rowPress && ev.pointerId === rowPress.id) {
+      rowPress.row.classList.remove('pk-pressed');
+      rowPress = null;
+    }
+  };
+  doc.addEventListener('pointerup', endRow);
+  doc.addEventListener('pointercancel', endRow);
+
+  /* (39) swipe actions: .pk-swipe holds .pk-swipe-actions (buttons) and a .pk-swipe-front. Swipe the front left past
+     60 pt to open; tap elsewhere or an action to close. The front's own tap is ignored right after a swipe. */
+  let swOpen = null, swipe = null;
+  const actionsWidth = (sw) => {
+    const a = sw.querySelector('.pk-swipe-actions');
+    return a ? a.offsetWidth : 0;
+  };
+  function closeSwipe(front) {
+    if (!front) return;
+    front.style.setProperty('--pk-sx', '0px');
+    const row = front.parentElement;
+    later(() => {
+      if (swOpen !== front && !front.classList.contains('pk-dragging')) row.classList.remove('pk-show');
+    }, motion.spring('gentle') || 1);
+    if (swOpen === front) swOpen = null;
+  }
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const front = ev.target.closest && ev.target.closest('.pk-swipe-front');
+    if (swOpen && swOpen !== front && !(ev.target.closest && ev.target.closest('.pk-swipe-actions'))) closeSwipe(swOpen);
+    if (!front) return;
+    swipe = { front, x: ev.clientX, y: ev.clientY, base: parseFloat(front.style.getPropertyValue('--pk-sx')) || 0, on: false, id: ev.pointerId };
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = swipe;
+    if (!d || ev.pointerId !== d.id) return;
+    const f = d.front, s = scaleOf(f), dx = (ev.clientX - d.x) / s, dy = (ev.clientY - d.y) / s;
+    if (!d.on) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+        d.on = true;
+        f.classList.add('pk-dragging');
+        f.parentElement.classList.add('pk-show');
+        try {
+          f.setPointerCapture(ev.pointerId);
+        } catch (e) {}
+      } else return;
+    }
+    const W = actionsWidth(f.parentElement);
+    let x = d.base + dx;
+    if (x > 0) x *= 0.2;
+    if (x < -W) x = -W + (x + W) * 0.3;
+    f.style.setProperty('--pk-sx', x.toFixed(1) + 'px');
+  });
+  function endSwipe(ev) {
+    const d = swipe;
+    if (!d || ev.pointerId !== d.id) return;
+    swipe = null;
+    const f = d.front;
+    if (!d.on) {
+      if (swOpen === f) closeSwipe(f);
+      return;
+    }
+    f.classList.remove('pk-dragging');
+    f._pkSwiped = performance.now();
+    const x = parseFloat(f.style.getPropertyValue('--pk-sx')) || 0;
+    if (x < -N.swipeOpen) {
+      f.style.setProperty('--pk-sx', -actionsWidth(f.parentElement) + 'px');
+      swOpen = f;
+      emit(f.parentElement, 'swipe', { open: true });
+    } else closeSwipe(f);
+  }
+  doc.addEventListener('pointerup', endSwipe);
+  doc.addEventListener('pointercancel', endSwipe);
+  doc.addEventListener('click', (ev) => {
+    const f = ev.target.closest && ev.target.closest('.pk-swipe-front');
+    if (f && f._pkSwiped && performance.now() - f._pkSwiped < 400) {
+      ev.stopPropagation();
+      ev.preventDefault();
+      return;
+    }
+    const act = ev.target.closest && ev.target.closest('.pk-swipe-actions > button');
+    if (act) closeSwipe(act.closest('.pk-swipe').querySelector('.pk-swipe-front'));
+  }, true);
+
+  /* (40) reorderable list: in a .pk-reorder, hold a row's .pk-grip and drag. pk:reorder { from, to } fires first; call
+     preventDefault() on it to move the rows yourself (for an app that redraws). */
+  let reo = null;
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const g = ev.target.closest && ev.target.closest('.pk-reorder .pk-grip');
+    if (!g) return;
+    ev.preventDefault();
+    const list = g.closest('.pk-reorder'), r = Array.from(list.children).find((c) => c.contains(g));
+    const rows = Array.from(list.children);
+    reo = { list, r, y0: ev.clientY, i0: rows.indexOf(r), to: rows.indexOf(r), h: r.offsetHeight, rows, id: ev.pointerId };
+    try {
+      g.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    r.classList.add('pk-lifted');
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = reo;
+    if (!d || ev.pointerId !== d.id) return;
+    const dy = (ev.clientY - d.y0) / scaleOf(d.list);
+    d.r.style.translate = '0 ' + dy.toFixed(1) + 'px';
+    d.r.style.scale = motion.reduced() ? '' : '1.02';
+    const to = Math.max(0, Math.min(d.rows.length - 1, d.i0 + Math.round(dy / d.h)));
+    d.to = to;
+    d.rows.forEach((x, j) => {
+      if (x === d.r) return;
+      let sh = 0;
+      if (d.i0 < to && j > d.i0 && j <= to) sh = -d.h;
+      if (d.i0 > to && j < d.i0 && j >= to) sh = d.h;
+      x.style.translate = sh ? '0 ' + sh + 'px' : '';
+    });
+  });
+  function endReo(ev) {
+    const d = reo;
+    if (!d || ev.pointerId !== d.id) return;
+    reo = null;
+    d.r.classList.remove('pk-lifted');
+    d.rows.forEach((x) => {
+      x.style.transition = 'none';
+      x.style.translate = '';
+      x.style.scale = '';
+    });
+    if (d.to !== d.i0) {
+      const e = emit(d.list, 'reorder', { from: d.i0, to: d.to, row: d.r });
+      if (!e.defaultPrevented) {
+        const arr = d.rows.slice();
+        arr.splice(d.i0, 1);
+        arr.splice(d.to, 0, d.r);
+        arr.forEach((x) => d.list.append(x));
+      }
+    }
+    void d.list.offsetWidth;
+    d.rows.forEach((x) => (x.style.transition = ''));
+  }
+  doc.addEventListener('pointerup', endReo);
+  doc.addEventListener('pointercancel', endReo);
+
   /* ==PARTS== (each group below adds its part) */
 
   /* ============================================================================================================

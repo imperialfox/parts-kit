@@ -244,7 +244,7 @@
 /* ===================================================================================================================
    FOUNDATIONS
    =================================================================================================================== */
-:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button, .pk-field-clear) {
+:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button, .pk-field-clear, button.pk-row, .pk-swipe-actions > button) {
   font: inherit;
   color: inherit;
   border: 0;
@@ -1245,4 +1245,196 @@ body > .pk-layer {
   line-height: 1.35;
   padding: 0;
   overflow: hidden;
+}
+
+/* ===================================================================================================================
+   LISTS · lists stay solid, not glass
+   =================================================================================================================== */
+
+/* (36) grouped section: a header, rows in an inset group (corners 20) and a footer */
+.pk-list {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+.pk-section-head {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--fg2);
+  margin: 0 16px 6px;
+}
+.pk-section-foot {
+  font-size: 13px;
+  color: var(--fg2);
+  margin: 6px 16px 0;
+}
+/* (35) list row: 50 pt, a 34 pt icon tile, a chevron when it opens something. Rows that do something (a button, a
+   link or .pk-tap) highlight while pressed (row.press 'highlight', D06) or shrink to --press-row ('shrink') */
+.pk-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  width: 100%;
+  padding: 8px 16px;
+  background: var(--surface);
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+  font-size: 17px;
+}
+.pk-row + .pk-row::before,
+.pk-row.pk-sep::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 0.5px;
+  background: var(--sep);
+}
+.pk-tiles .pk-row + .pk-row::before {
+  left: 62px;
+}
+.pk-row-text {
+  flex: 1;
+  min-width: 0;
+}
+.pk-row-text small {
+  display: block;
+  font-size: 13px;
+  color: var(--fg2);
+  margin-top: 1px;
+}
+.pk-row-value {
+  color: var(--fg2);
+}
+.pk-chev {
+  color: var(--fg3);
+}
+.pk-tile {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-small);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex: none;
+}
+:is(button.pk-row, a.pk-row, .pk-row.pk-tap) {
+  cursor: pointer;
+  transition:
+    background-color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out),
+    scale var(--dur-release) var(--ease-release);
+}
+.pk-row.pk-pressed {
+  background-color: var(--pk-row-press);
+  transition: none;
+}
+.pk-row-shrink .pk-row.pk-pressed {
+  background-color: var(--surface);
+  scale: var(--press-row);
+  transition: scale calc(var(--dur-quick) * var(--pk-speed)) var(--ease-pop);
+}
+.motion-reduced.pk-row-shrink .pk-row.pk-pressed,
+.motion-reduced .pk-row-shrink .pk-row.pk-pressed {
+  scale: none;
+}
+
+/* (33) glass container: a plain glass panel that can hold anything. (34) card: a glass card */
+.pk-container {
+  border-radius: var(--r-card);
+  padding: 16px;
+}
+.pk-card {
+  border-radius: var(--r-large);
+  padding: 16px;
+}
+
+/* (38) divider: a hairline, full width or inset past an icon */
+.pk-divider {
+  height: 0.5px;
+  background: var(--sep);
+  margin: 12px 0;
+}
+.pk-divider.pk-inset {
+  margin-left: 46px;
+}
+
+/* (39) swipe actions: swipe a row left to show its actions (Delete is 88 pt). Tap elsewhere to close */
+.pk-swipe {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+}
+.pk-swipe + .pk-swipe::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 0.5px;
+  background: var(--sep);
+  z-index: 2;
+}
+.pk-swipe-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  visibility: hidden;
+}
+.pk-swipe.pk-show .pk-swipe-actions {
+  visibility: visible;
+}
+.pk-swipe-actions > button {
+  width: 88px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--fg3);
+}
+.pk-swipe-actions > .pk-red {
+  background: var(--danger);
+}
+.pk-swipe-actions > .pk-orange {
+  background: var(--pk-orange);
+}
+.pk-swipe-front {
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y;
+  translate: var(--pk-sx, 0px) 0;
+  transition: translate var(--dur-gentle) var(--ease-gentle);
+}
+.pk-swipe-front.pk-dragging {
+  transition: none;
+}
+
+/* (40) reorderable list: hold the handle and drag */
+.pk-reorder > * {
+  transition: translate var(--dur-gentle) var(--ease-gentle);
+}
+.pk-reorder > .pk-lifted {
+  z-index: 5;
+  transition: none;
+  box-shadow: var(--shadow-lifted);
+  border-radius: var(--r-medium);
+}
+.pk-grip {
+  color: var(--fg3);
+  touch-action: none;
+  cursor: grab;
+  padding: 8px;
+  margin: -8px;
 }

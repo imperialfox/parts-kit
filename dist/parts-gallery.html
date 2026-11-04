@@ -412,7 +412,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
 /* ===================================================================================================================
    FOUNDATIONS
    =================================================================================================================== */
-:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button, .pk-field-clear) {
+:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button, .pk-field-clear, button.pk-row, .pk-swipe-actions > button) {
   font: inherit;
   color: inherit;
   border: 0;
@@ -1413,6 +1413,198 @@ body > .pk-layer {
   line-height: 1.35;
   padding: 0;
   overflow: hidden;
+}
+
+/* ===================================================================================================================
+   LISTS · lists stay solid, not glass
+   =================================================================================================================== */
+
+/* (36) grouped section: a header, rows in an inset group (corners 20) and a footer */
+.pk-list {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+.pk-section-head {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--fg2);
+  margin: 0 16px 6px;
+}
+.pk-section-foot {
+  font-size: 13px;
+  color: var(--fg2);
+  margin: 6px 16px 0;
+}
+/* (35) list row: 50 pt, a 34 pt icon tile, a chevron when it opens something. Rows that do something (a button, a
+   link or .pk-tap) highlight while pressed (row.press 'highlight', D06) or shrink to --press-row ('shrink') */
+.pk-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  width: 100%;
+  padding: 8px 16px;
+  background: var(--surface);
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+  font-size: 17px;
+}
+.pk-row + .pk-row::before,
+.pk-row.pk-sep::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 0.5px;
+  background: var(--sep);
+}
+.pk-tiles .pk-row + .pk-row::before {
+  left: 62px;
+}
+.pk-row-text {
+  flex: 1;
+  min-width: 0;
+}
+.pk-row-text small {
+  display: block;
+  font-size: 13px;
+  color: var(--fg2);
+  margin-top: 1px;
+}
+.pk-row-value {
+  color: var(--fg2);
+}
+.pk-chev {
+  color: var(--fg3);
+}
+.pk-tile {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-small);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex: none;
+}
+:is(button.pk-row, a.pk-row, .pk-row.pk-tap) {
+  cursor: pointer;
+  transition:
+    background-color calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out),
+    scale var(--dur-release) var(--ease-release);
+}
+.pk-row.pk-pressed {
+  background-color: var(--pk-row-press);
+  transition: none;
+}
+.pk-row-shrink .pk-row.pk-pressed {
+  background-color: var(--surface);
+  scale: var(--press-row);
+  transition: scale calc(var(--dur-quick) * var(--pk-speed)) var(--ease-pop);
+}
+.motion-reduced.pk-row-shrink .pk-row.pk-pressed,
+.motion-reduced .pk-row-shrink .pk-row.pk-pressed {
+  scale: none;
+}
+
+/* (33) glass container: a plain glass panel that can hold anything. (34) card: a glass card */
+.pk-container {
+  border-radius: var(--r-card);
+  padding: 16px;
+}
+.pk-card {
+  border-radius: var(--r-large);
+  padding: 16px;
+}
+
+/* (38) divider: a hairline, full width or inset past an icon */
+.pk-divider {
+  height: 0.5px;
+  background: var(--sep);
+  margin: 12px 0;
+}
+.pk-divider.pk-inset {
+  margin-left: 46px;
+}
+
+/* (39) swipe actions: swipe a row left to show its actions (Delete is 88 pt). Tap elsewhere to close */
+.pk-swipe {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+}
+.pk-swipe + .pk-swipe::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 0.5px;
+  background: var(--sep);
+  z-index: 2;
+}
+.pk-swipe-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  visibility: hidden;
+}
+.pk-swipe.pk-show .pk-swipe-actions {
+  visibility: visible;
+}
+.pk-swipe-actions > button {
+  width: 88px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--fg3);
+}
+.pk-swipe-actions > .pk-red {
+  background: var(--danger);
+}
+.pk-swipe-actions > .pk-orange {
+  background: var(--pk-orange);
+}
+.pk-swipe-front {
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y;
+  translate: var(--pk-sx, 0px) 0;
+  transition: translate var(--dur-gentle) var(--ease-gentle);
+}
+.pk-swipe-front.pk-dragging {
+  transition: none;
+}
+
+/* (40) reorderable list: hold the handle and drag */
+.pk-reorder > * {
+  transition: translate var(--dur-gentle) var(--ease-gentle);
+}
+.pk-reorder > .pk-lifted {
+  z-index: 5;
+  transition: none;
+  box-shadow: var(--shadow-lifted);
+  border-radius: var(--r-medium);
+}
+.pk-grip {
+  color: var(--fg3);
+  touch-action: none;
+  cursor: grab;
+  padding: 8px;
+  margin: -8px;
 }
 
 </style>
@@ -4018,6 +4210,171 @@ body > .pk-layer {
   doc.addEventListener('pointerup', endStretch);
   doc.addEventListener('pointercancel', endStretch);
 
+  /* ============================================================================================================
+     LISTS
+     ============================================================================================================ */
+
+  /* (35) row press: rows that do something (button, link or .pk-tap) highlight while pressed (D06), or shrink with
+     row.press 'shrink'. Moving more than 10 pt (a scroll) lets go. */
+  let rowPress = null;
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const row = ev.target.closest && ev.target.closest('button.pk-row, a.pk-row, .pk-row.pk-tap');
+    if (!row) return;
+    const inner = ev.target.closest('button, a, input, textarea, select, .pk-switch, .pk-slider, .pk-seg, .pk-stepper, [data-own-gesture]');
+    if (inner && inner !== row) return;
+    rowPress = { row, x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+    row.classList.add('pk-pressed');
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = rowPress;
+    if (!d || ev.pointerId !== d.id) return;
+    const s = scaleOf(d.row);
+    if (Math.hypot((ev.clientX - d.x) / s, (ev.clientY - d.y) / s) > N.holdMove) {
+      d.row.classList.remove('pk-pressed');
+      rowPress = null;
+    }
+  });
+  const endRow = (ev) => {
+    if (rowPress && ev.pointerId === rowPress.id) {
+      rowPress.row.classList.remove('pk-pressed');
+      rowPress = null;
+    }
+  };
+  doc.addEventListener('pointerup', endRow);
+  doc.addEventListener('pointercancel', endRow);
+
+  /* (39) swipe actions: .pk-swipe holds .pk-swipe-actions (buttons) and a .pk-swipe-front. Swipe the front left past
+     60 pt to open; tap elsewhere or an action to close. The front's own tap is ignored right after a swipe. */
+  let swOpen = null, swipe = null;
+  const actionsWidth = (sw) => {
+    const a = sw.querySelector('.pk-swipe-actions');
+    return a ? a.offsetWidth : 0;
+  };
+  function closeSwipe(front) {
+    if (!front) return;
+    front.style.setProperty('--pk-sx', '0px');
+    const row = front.parentElement;
+    later(() => {
+      if (swOpen !== front && !front.classList.contains('pk-dragging')) row.classList.remove('pk-show');
+    }, motion.spring('gentle') || 1);
+    if (swOpen === front) swOpen = null;
+  }
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const front = ev.target.closest && ev.target.closest('.pk-swipe-front');
+    if (swOpen && swOpen !== front && !(ev.target.closest && ev.target.closest('.pk-swipe-actions'))) closeSwipe(swOpen);
+    if (!front) return;
+    swipe = { front, x: ev.clientX, y: ev.clientY, base: parseFloat(front.style.getPropertyValue('--pk-sx')) || 0, on: false, id: ev.pointerId };
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = swipe;
+    if (!d || ev.pointerId !== d.id) return;
+    const f = d.front, s = scaleOf(f), dx = (ev.clientX - d.x) / s, dy = (ev.clientY - d.y) / s;
+    if (!d.on) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+        d.on = true;
+        f.classList.add('pk-dragging');
+        f.parentElement.classList.add('pk-show');
+        try {
+          f.setPointerCapture(ev.pointerId);
+        } catch (e) {}
+      } else return;
+    }
+    const W = actionsWidth(f.parentElement);
+    let x = d.base + dx;
+    if (x > 0) x *= 0.2;
+    if (x < -W) x = -W + (x + W) * 0.3;
+    f.style.setProperty('--pk-sx', x.toFixed(1) + 'px');
+  });
+  function endSwipe(ev) {
+    const d = swipe;
+    if (!d || ev.pointerId !== d.id) return;
+    swipe = null;
+    const f = d.front;
+    if (!d.on) {
+      if (swOpen === f) closeSwipe(f);
+      return;
+    }
+    f.classList.remove('pk-dragging');
+    f._pkSwiped = performance.now();
+    const x = parseFloat(f.style.getPropertyValue('--pk-sx')) || 0;
+    if (x < -N.swipeOpen) {
+      f.style.setProperty('--pk-sx', -actionsWidth(f.parentElement) + 'px');
+      swOpen = f;
+      emit(f.parentElement, 'swipe', { open: true });
+    } else closeSwipe(f);
+  }
+  doc.addEventListener('pointerup', endSwipe);
+  doc.addEventListener('pointercancel', endSwipe);
+  doc.addEventListener('click', (ev) => {
+    const f = ev.target.closest && ev.target.closest('.pk-swipe-front');
+    if (f && f._pkSwiped && performance.now() - f._pkSwiped < 400) {
+      ev.stopPropagation();
+      ev.preventDefault();
+      return;
+    }
+    const act = ev.target.closest && ev.target.closest('.pk-swipe-actions > button');
+    if (act) closeSwipe(act.closest('.pk-swipe').querySelector('.pk-swipe-front'));
+  }, true);
+
+  /* (40) reorderable list: in a .pk-reorder, hold a row's .pk-grip and drag. pk:reorder { from, to } fires first; call
+     preventDefault() on it to move the rows yourself (for an app that redraws). */
+  let reo = null;
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const g = ev.target.closest && ev.target.closest('.pk-reorder .pk-grip');
+    if (!g) return;
+    ev.preventDefault();
+    const list = g.closest('.pk-reorder'), r = Array.from(list.children).find((c) => c.contains(g));
+    const rows = Array.from(list.children);
+    reo = { list, r, y0: ev.clientY, i0: rows.indexOf(r), to: rows.indexOf(r), h: r.offsetHeight, rows, id: ev.pointerId };
+    try {
+      g.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    r.classList.add('pk-lifted');
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    const d = reo;
+    if (!d || ev.pointerId !== d.id) return;
+    const dy = (ev.clientY - d.y0) / scaleOf(d.list);
+    d.r.style.translate = '0 ' + dy.toFixed(1) + 'px';
+    d.r.style.scale = motion.reduced() ? '' : '1.02';
+    const to = Math.max(0, Math.min(d.rows.length - 1, d.i0 + Math.round(dy / d.h)));
+    d.to = to;
+    d.rows.forEach((x, j) => {
+      if (x === d.r) return;
+      let sh = 0;
+      if (d.i0 < to && j > d.i0 && j <= to) sh = -d.h;
+      if (d.i0 > to && j < d.i0 && j >= to) sh = d.h;
+      x.style.translate = sh ? '0 ' + sh + 'px' : '';
+    });
+  });
+  function endReo(ev) {
+    const d = reo;
+    if (!d || ev.pointerId !== d.id) return;
+    reo = null;
+    d.r.classList.remove('pk-lifted');
+    d.rows.forEach((x) => {
+      x.style.transition = 'none';
+      x.style.translate = '';
+      x.style.scale = '';
+    });
+    if (d.to !== d.i0) {
+      const e = emit(d.list, 'reorder', { from: d.i0, to: d.to, row: d.r });
+      if (!e.defaultPrevented) {
+        const arr = d.rows.slice();
+        arr.splice(d.i0, 1);
+        arr.splice(d.to, 0, d.r);
+        arr.forEach((x) => d.list.append(x));
+      }
+    }
+    void d.list.offsetWidth;
+    d.rows.forEach((x) => (x.style.transition = ''));
+  }
+  doc.addEventListener('pointerup', endReo);
+  doc.addEventListener('pointercancel', endReo);
+
   /* ==PARTS== (each group below adds its part) */
 
   /* ============================================================================================================
@@ -4188,6 +4545,23 @@ H += part(27, 'Text field', 'e', 'A solid well, 44 pt, corners 14. Text stays at
 H += part(29, 'Text area', 'e', 'Grows as you type. <code>.pk-field.pk-area</code>',
   `<label class="pk-field pk-area" data-name="Text area"><textarea rows="3" placeholder="Add a note" aria-label="Note"></textarea></label>`);
 
+
+H += sec('lists', 'Lists');
+H += part(33, 'Glass container', 'e', 'A plain glass panel that can hold anything, corners 20. <code>.pk-container.pk-glass</code>',
+  stage(`<div class="pk-container pk-glass" style="width:100%;font-size:15px" data-name="Container"><b style="display:block;font-size:17px;margin-bottom:4px">Container</b>Content sits on glass, with the colours behind showing through.</div>`, 'tall'));
+H += part(34, 'Card', 'e', 'A glass card with a title, text and a button, corners 26. The button inside is clear glass (no glass inside glass). <code>.pk-card.pk-glass</code>',
+  stage(`<div class="pk-card pk-glass" style="width:100%" data-name="Card"><div style="display:flex;gap:12px;align-items:center"><span class="pk-tile" style="background:var(--sys-indigo)">${ic('star', 20)}</span><div><b>Weekly plan</b><div style="font-size:13px;color:var(--fg2)">5 items · updated today</div></div></div><button class="pk-btn pk-pill pk-clear pk-press" style="margin-top:12px;height:38px" data-name="Card button">Open</button></div>`, 'tall'));
+H += part(35, 'List row', 'e', 'Lists stay solid, not glass: 50 pt rows, a 34 pt icon tile, and a chevron when it opens something. Pressed, a row highlights (<code>row.press</code> highlight, D06) or shrinks to 0.98 (shrink). <code>.pk-row</code>',
+  `<div class="pk-list pk-tiles">${row('Weekly plan', '5 items', ['cal', 'var(--sys-red)'], chev, 'button')}${row('Reading list', '12 items', ['book', 'var(--sys-blue)'], chev, 'button')}</div>`);
+H += part(36, 'Grouped section', 'e', 'A header, rows and a footer, corners 20. <code>.pk-section-head</code> <code>.pk-list</code> <code>.pk-section-foot</code>',
+  `<div data-name="Grouped section"><div class="pk-section-head">Notifications</div><div class="pk-list pk-tiles">${row('Reminders', '', ['bell', 'var(--sys-red)'], `<span class="pk-row-value">On</span>${chev}`, 'button')}${row('Sounds', '', ['note', 'var(--sys-pink)'], `<span class="pk-row-value">Chime</span>${chev}`, 'button')}${row('Badges', '', ['grid', 'var(--sys-blue)'], chev, 'button')}</div><div class="pk-section-foot">Choose how you're told about new things.</div></div>`);
+H += part(38, 'Divider', 'e', 'A hairline, full width or inset past an icon. <code>.pk-divider</code>',
+  `<div class="pk-list" style="padding:14px 16px;font-size:15px" data-name="Divider sample">Full width<div class="pk-divider" data-name="Divider"></div><div style="display:flex;gap:12px;align-items:center"><span class="pk-tile" style="background:var(--sys-teal)">${ic('book', 18)}</span>Inset</div><div class="pk-divider pk-inset" data-name="Inset divider"></div>Below</div>`);
+H += part(39, 'Swipe actions', 'e', 'Swipe a row left to show Flag and an 88 pt Delete. Tap elsewhere to close. <code>.pk-swipe</code>',
+  `<div class="pk-list" data-name="Swipe list">${['Morning notes', 'Weekly plan', 'Recipes'].map(t => `<div class="pk-swipe" data-name="Swipe row: ${t}"><div class="pk-swipe-actions"><button class="pk-orange" data-a="flag">${ic('flag', 20)}Flag</button><button class="pk-red" data-a="delete">${ic('trash', 20)}Delete</button></div><div class="pk-swipe-front pk-row">${t}</div></div>`).join('')}</div>`);
+H += part(40, 'Reorderable list', 'e', 'Hold the handle and drag to reorder. <code>.pk-reorder</code> with a <code>.pk-grip</code> per row',
+  `<div class="pk-list pk-reorder" id="reo" data-name="Reorder list">${['Warm up', 'Main set', 'Cool down', 'Stretch'].map(t => `<div class="pk-row" data-name="Row: ${t}"><span class="pk-row-text">${t}</span><span class="pk-grip" data-name="Handle">${ic('grip', 20)}</span></div>`).join('')}</div>`);
+
 /* ==SECTIONS== */
 
 H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in 1.0: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
@@ -4231,6 +4605,10 @@ $('#moreBtn').addEventListener('click', () => { if (Parts.menu) Parts.menu($('#m
 /* ---------- demos: controls ---------- */
 $('#vol').addEventListener('pk:input', e => $('#slv').textContent = Math.round(e.detail.value));
 (() => { let p = 35; $('#runBtn').addEventListener('click', () => { p = p >= 100 ? 10 : Math.min(100, p + 25); $('#pb').style.setProperty('--pk-v', p); $('#ring').style.setProperty('--pk-v', p); }); })();
+
+
+/* ---------- demos: lists ---------- */
+$$('.pk-swipe-actions button').forEach(b => b.addEventListener('click', () => { const t = b.closest('.pk-swipe').querySelector('.pk-swipe-front').textContent; if (Parts.toast) Parts.toast(b.dataset.a === 'delete' ? `Deleted “${t}”` : 'Flagged', b.dataset.a === 'delete' ? { undo: () => Parts.toast('Undone') } : null); }));
 
 /* ==BEHAVIOUR== */
 

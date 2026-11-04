@@ -1205,6 +1205,639 @@
   doc.addEventListener('pointerup', endReo);
   doc.addEventListener('pointercancel', endReo);
 
+  /* ============================================================================================================
+     OVERLAYS
+     ============================================================================================================ */
+  const closeBtn = (o, extra) =>
+    '<button class="pk-btn pk-circle pk-sm ' + (extra || 'pk-clear') + ' pk-press pk-sheet-close" data-name="' + nm({ name: o && o.closeName }, 'Close button') + '" aria-label="Close">' + icon('x', 18) + '</button>';
+  const content = (x) => (x == null ? '' : typeof x === 'string' ? x : '');
+  const place = (el, x) => {
+    if (x && x.nodeType === 1) el.append(x);
+  };
+
+  /* (41, 42) Parts.sheet({ title, html | node, key, name, closeName, onClose }) → { el, body, close(), grow(),
+     to(stop) }. key is the sheet's name in the settings: sheet.withStops gives it the 45% and full stops,
+     sheet.growsToFull lets grow() raise it to full screen, sheet.fullScreen opens it as a cover instead. */
+  function sheet(o) {
+    o = o || {};
+    if (allowed(S.sheet.fullScreen, o.key)) return cover(o);
+    const H = screenH();
+    const withStops = allowed(S.sheet.withStops, o.key);
+    const canGrow = allowed(S.sheet.growsToFull, o.key);
+    const el = doc.createElement('div');
+    el.className = 'pk-sheet pk-glass' + (S.sheet.glass === 'strong' ? ' pk-strong' : '');
+    el.dataset.name = nm(o, 'Sheet');
+    el.setAttribute('role', 'dialog');
+    el.innerHTML =
+      '<i class="pk-sheet-solid"></i><div class="pk-sheet-head"><i class="pk-grabber" data-name="Grabber"></i><div class="pk-sheet-title">' +
+      esc(o.title || '') + '</div>' + closeBtn(o) + '</div><div class="pk-sheet-body">' + content(o.html) + '</div>';
+    const body = el.querySelector('.pk-sheet-body');
+    place(body, o.html);
+    const dim = dimLayer('', () => ctl.close());
+    layer().append(el);
+    // the stops, as visible heights
+    const margin = 8;
+    let stops;
+    if (withStops) stops = [Math.round(H * N.medium), H - N.topInset];
+    else {
+      el.style.height = 'auto';
+      el.style.maxHeight = H - N.topInset + 'px';
+      el.style.setProperty('--pk-y', '0px');
+      el.style.visibility = 'hidden';
+      const h = Math.min(H - N.topInset, el.offsetHeight);
+      el.style.visibility = '';
+      el.style.maxHeight = '';
+      stops = [h];
+    }
+    const full = H;
+    let grown = false;
+    const tall = () => (canGrow ? full : stops[stops.length - 1]);
+    el.style.height = tall() + 'px';
+    let cur = stops[0];
+    const big = (h) => withStops && h >= H - N.topInset - 1;
+    function setAt(h, how) {
+      // how: 'snap' (spring), 'drag' (follows the finger), 'leave'
+      el.classList.toggle('pk-dragging', how === 'drag');
+      const m = big(h) || h >= full - 1 ? 0 : margin;
+      el.style.setProperty('--pk-m', m + 'px');
+      el.style.setProperty('--pk-y', (tall() - h + (m ? 0 : 0)).toFixed(1) + 'px');
+      el.classList.toggle('pk-solid-now', big(h) || h >= full - 1);
+    }
+    const ctl = track({
+      el,
+      body,
+      key: o.key,
+      get stop() {
+        return cur >= full - 1 ? 'full' : withStops && cur === stops[1] ? 'large' : withStops ? 'medium' : 'fit';
+      },
+      to(name) {
+        const h = name === 'full' ? (canGrow ? full : stops[stops.length - 1]) : name === 'large' && withStops ? stops[1] : stops[0];
+        cur = h;
+        if (h >= full - 1) grown = true;
+        setAt(h, 'snap');
+      },
+      grow() {
+        if (!canGrow) return false;
+        grown = true;
+        cur = full;
+        setAt(full, 'snap');
+        emit(el, 'grow');
+        return true;
+      },
+      close(why) {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        el.classList.add('pk-leaving');
+        el.classList.remove('pk-dragging');
+        if (motion.reduced()) el.style.opacity = '0';
+        else el.style.setProperty('--pk-y', tall() + margin + 20 + 'px');
+        dropDim(dim, dur('--dur-leave'));
+        after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+        emit(el, 'close', { why: why || 'close' });
+        if (o.onClose) o.onClose(why || 'close');
+      },
+    });
+    el.querySelector('.pk-sheet-close').addEventListener('click', () => ctl.close('button'));
+    // in: from below the screen to the first stop
+    el.style.setProperty('--pk-m', margin + 'px');
+    if (motion.reduced()) {
+      el.style.opacity = '0';
+      setAt(cur, 'snap');
+      void el.offsetWidth;
+      el.style.transition = 'opacity ' + dur('--dur-reduced') + 'ms';
+      el.style.opacity = '1';
+      after(() => (el.style.transition = ''), dur('--dur-reduced'));
+    } else {
+      el.style.setProperty('--pk-y', tall() + margin + 'px');
+      void el.offsetWidth;
+      setAt(cur, 'snap');
+    }
+    // the content tells the sheet when it's scrolled to the top (so a pull down there moves the sheet)
+    const atTop = () => body.classList.toggle('pk-at-top', body.scrollTop <= 0);
+    body.addEventListener('scroll', atTop, { passive: true });
+    atTop();
+    // dragging: from the header always; from the content when it's at the top
+    let d = null;
+    el.addEventListener('pointerdown', (ev) => {
+      if (ev.button > 0 || ctl.closed) return;
+      if (ev.target.closest('button, a, input, textarea, select, [data-own-gesture], .pk-switch, .pk-slider, .pk-seg, .pk-swipe-front, .pk-grip')) return;
+      const inBody = body.contains(ev.target);
+      if (inBody && body.scrollTop > 0) return;
+      d = { y: ev.clientY, id: ev.pointerId, base: cur, inBody, tr: tracker(), on: false, lastY: ev.clientY, gy: ev.clientY };
+    });
+    el.addEventListener('pointermove', (ev) => {
+      if (!d || ev.pointerId !== d.id) return;
+      const s = sc(), dy = (ev.clientY - d.y) / s;
+      const step = (ev.clientY - d.lastY) / s;
+      d.lastY = ev.clientY;
+      const top = tall();
+      // pulling up inside content that has more to show: scroll the content instead
+      if (d.inBody && !d.on && cur >= stops[stops.length - 1] - 1 && (step < 0 || body.scrollTop > 0) && body.scrollHeight > body.clientHeight + 1) {
+        body.scrollTop -= step;
+        return;
+      }
+      if (!d.on) {
+        if (Math.abs(dy) < 4) return;
+        d.on = true;
+        try {
+          el.setPointerCapture(ev.pointerId);
+        } catch (e) {}
+      }
+      let h = d.base - dy;
+      if (h > top) h = top + (h - top) * 0.08;
+      d.h = h;
+      d.tr.add(-h);
+      const lowest = stops[0];
+      if (S.sheet.dragShrink && h < lowest && !motion.reduced()) {
+        // (D14's alternative) shrink while dragged down: 1 − 0.64 × travel ÷ height, 1:1 to 0.48, then resisting to 0.33
+        const t = (lowest - h) / el.offsetHeight;
+        const k = N.shrink;
+        const sAt = t <= k.linear ? 1 - k.k * t : k.floor + (1 - k.k * k.linear - k.floor) * Math.exp(-(t - k.linear) * 3);
+        el.style.transformOrigin = '50% ' + (((d.gy - el.getBoundingClientRect().top) / s) | 0) + 'px';
+        el.style.setProperty('--pk-shrink', sAt.toFixed(4));
+      }
+      setAt(h, 'drag');
+    });
+    function up(ev) {
+      if (!d || ev.pointerId !== d.id) return;
+      const was = d;
+      d = null;
+      if (!was.on || was.h == null) return;
+      el.style.removeProperty('--pk-shrink');
+      const v = was.tr.v(); // pt/s, positive = downward
+      const h = was.h;
+      const all = [0].concat(stops, grown && canGrow ? [full] : []);
+      const i = Math.max(0, all.indexOf(was.base));
+      let target;
+      if (Math.abs(v) > N.flick) target = all[Math.max(0, Math.min(all.length - 1, i + (v > 0 ? -1 : 1)))];
+      else {
+        const dir = h < was.base ? -1 : 1, nx = all[Math.max(0, Math.min(all.length - 1, i + dir))];
+        target = nx !== was.base && Math.abs(h - was.base) >= N.snapAt * Math.abs(nx - was.base) ? nx : was.base;
+      }
+      if (target === 0) ctl.close('drag');
+      else {
+        cur = target;
+        setAt(target, 'snap');
+        emit(el, 'stop', { stop: ctl.stop });
+      }
+    }
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    emit(el, 'open', { key: o.key });
+    return ctl;
+  }
+
+  /* (43) Parts.cover({ title, html | node, name, onClose }) → { el, body, close() } */
+  function cover(o) {
+    o = o || {};
+    const el = doc.createElement('div');
+    el.className = 'pk-cover';
+    el.dataset.name = nm(o, 'Full-screen cover');
+    el.setAttribute('role', 'dialog');
+    el.innerHTML =
+      '<div class="pk-bar-slot pk-right">' + closeBtn(o, 'pk-glass').replace('pk-sm ', '') + '</div><div class="pk-cover-body">' +
+      (o.title ? '<h1 class="pk-large-title">' + esc(o.title) + '</h1>' : '') + content(o.html) + '</div>';
+    const body = el.querySelector('.pk-cover-body');
+    place(body, o.html);
+    layer().append(el);
+    void el.offsetWidth;
+    el.classList.add('pk-on');
+    const ctl = track({
+      el,
+      body,
+      key: o.key,
+      stop: 'full',
+      grow: () => false,
+      to() {},
+      close(why) {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        el.classList.add('pk-leaving');
+        el.classList.remove('pk-on');
+        after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+        emit(el, 'close', { why: why || 'close' });
+        if (o.onClose) o.onClose(why || 'close');
+      },
+    });
+    el.querySelector('.pk-sheet-close').addEventListener('click', () => ctl.close('button'));
+    emit(el, 'open', { key: o.key });
+    return ctl;
+  }
+
+  /* (16, 44) growing out of a button: place a panel next to its anchor and morph it out of the anchor */
+  function morphFrom(anchor, panel, where) {
+    layer().append(panel);
+    const b = rel(anchor), pw = panel.offsetWidth, ph = panel.offsetHeight, W = screenW(), Hh = screenH();
+    where = where || (b.x + b.w / 2 > (W * 2) / 3 ? 'right' : b.x + b.w / 2 < W / 3 ? 'left' : 'center');
+    let x = where === 'right' ? b.x + b.w - pw : where === 'center' ? b.x + b.w / 2 - pw / 2 : b.x;
+    x = Math.max(12, Math.min(W - pw - 12, x));
+    let y = b.y + b.h + 8;
+    if (y + ph > Hh - 24) y = Math.max(12, b.y - ph - 8);
+    panel.style.left = x + 'px';
+    panel.style.top = y + 'px';
+    panel.style.setProperty('--pk-ox', (b.x + b.w / 2 - x).toFixed(1) + 'px');
+    panel.style.setProperty('--pk-oy', (y > b.y ? 0 : ph) + 'px');
+    panel.style.setProperty('--pk-s0x', Math.min(1, b.w / pw).toFixed(3));
+    panel.style.setProperty('--pk-s0y', Math.min(1, b.h / ph).toFixed(3));
+    void panel.offsetWidth;
+    panel.classList.add('pk-on');
+  }
+  function unmorph(panel) {
+    panel.classList.remove('pk-on');
+    panel.classList.add('pk-leaving');
+    after(() => panel.remove(), Math.max(motion.spring('menu-close') * 0.6, dur('--dur-close'), motion.reduced() ? dur('--dur-reduced') : 0));
+  }
+
+  /* menus: items are { label, icon (svg text), red, disabled, value, sub: [items] } or '-' for a gap */
+  function menuRows(items, subsOn) {
+    return items
+      .map((it, i) => {
+        if (it === '-') return '<div class="pk-menu-sep"></div>';
+        if (it.sub && !subsOn)
+          return '<div class="pk-menu-label">' + esc(it.label) + '</div>' + menuRows(it.sub, false) + (i < items.length - 1 && items[i + 1] !== '-' ? '<div class="pk-menu-sep"></div>' : '');
+        return (
+          '<button class="pk-menu-item' + (it.red ? ' pk-red' : '') + '" data-i="' + i + '"' + (it.disabled ? ' disabled' : '') + ' data-name="Menu row: ' + esc(it.label) + '"><span>' +
+          esc(it.label) + '</span>' + (it.sub ? icon('chevR', 18) : it.icon || '') + '</button>'
+        );
+      })
+      .join('');
+  }
+  function flatItems(items, subsOn) {
+    // the item objects in the same order as their rows, for picking
+    const out = [];
+    items.forEach((it) => {
+      if (it === '-') return;
+      if (it.sub && !subsOn) out.push(...flatItems(it.sub, false));
+      else out.push(it);
+    });
+    return out;
+  }
+  function buildMenu(items, o, subsOn) {
+    const m = doc.createElement('div');
+    m.className = 'pk-menu pk-morph';
+    m.dataset.name = nm(o, 'Menu');
+    m.setAttribute('role', 'menu');
+    m.innerHTML = menuRows(items, subsOn);
+    // number the rows in order so a flattened submenu still picks the right item
+    const list = flatItems(items, subsOn);
+    $$('.pk-menu-item', m).forEach((b, i) => (b.dataset.i = i));
+    m._items = list;
+    return m;
+  }
+  /* Parts.menu(anchor, items, { key, name, place: 'left' | 'center' | 'right', onPick(item) }) → { el, close() }
+     (16) a pull-down menu growing out of its button. (45, pinned) items with sub open a submenu where
+     menu.submenus names the menu's key; elsewhere they're shown inline under a small label. */
+  function menu(anchor, items, o) {
+    o = o || {};
+    const subsOn = allowed(S.menu.submenus, o.key);
+    const m = buildMenu(items, o, subsOn);
+    let sub = null;
+    const dim = dimLayer('pk-clear-dim', () => ctl.close());
+    morphFrom(anchor, m, o.place);
+    const ctl = track({
+      el: m,
+      close() {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        unmorph(m);
+        if (sub) {
+          const sb = sub;
+          sb.classList.remove('pk-on');
+          after(() => sb.remove(), dur('--dur-fade'));
+        }
+        dropDim(dim, 0);
+        emit(anchor, 'close');
+      },
+    });
+    function pick(it, row) {
+      if (it.sub && subsOn) return openSub(it, row);
+      ctl.close();
+      emit(anchor, 'pick', { item: it, value: it.value != null ? it.value : it.label });
+      if (o.onPick) o.onPick(it);
+    }
+    function openSub(it) {
+      const sb = buildMenu([{ label: it.label, back: true }].concat(it.sub), { name: 'Submenu' }, false);
+      sb.classList.remove('pk-morph');
+      sb.classList.add('pk-submenu');
+      sb.firstChild.innerHTML = icon('chevL', 18) + '<span style="font-weight:600">' + esc(it.label) + '</span>';
+      layer().append(sb);
+      const r = rel(m);
+      sb.style.left = r.x + 10 + 'px';
+      sb.style.top = r.y + 26 + 'px';
+      m.classList.add('pk-recede');
+      void sb.offsetWidth;
+      sb.classList.add('pk-on');
+      sub = sb;
+      sb.addEventListener('click', (ev) => {
+        const b = ev.target.closest('.pk-menu-item');
+        if (!b) return;
+        const x = sb._items[+b.dataset.i];
+        if (x.back) {
+          m.classList.remove('pk-recede');
+          sb.classList.remove('pk-on');
+          after(() => sb.remove(), dur('--dur-recede'));
+          sub = null;
+          return;
+        }
+        pick(Object.assign({ parent: it.label }, x));
+      });
+      emit(anchor, 'submenu', { item: it });
+    }
+    m.addEventListener('click', (ev) => {
+      const b = ev.target.closest('.pk-menu-item');
+      if (b && !b.disabled) pick(m._items[+b.dataset.i], b);
+    });
+    emit(anchor, 'open');
+    return ctl;
+  }
+
+  /* (44) Parts.popover(anchor, html | node, { name }) → { el, close() }: grows out of its button; tap outside closes */
+  function popover(anchor, html, o) {
+    o = o || {};
+    const p = doc.createElement('div');
+    p.className = 'pk-popover pk-morph';
+    p.dataset.name = nm(o, 'Popover');
+    p.innerHTML = content(html);
+    place(p, html);
+    const dim = dimLayer('pk-clear-dim', () => ctl.close());
+    morphFrom(anchor, p, o.place || 'center');
+    const ctl = track({
+      el: p,
+      close() {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        unmorph(p);
+        dropDim(dim, 0);
+      },
+    });
+    return ctl;
+  }
+
+  /* (46) long-press: hold a .pk-hold. It lifts from timing.lift (200 ms) and at timing.hold (700 ms) sends pk:hold;
+     call ev.detail.open(items, { onPick, name }) in your listener to show its menu. Moving more than 10 pt or letting
+     go early cancels; right-click opens it at once. */
+  let hold = null;
+  function contextMenu(row, items, o) {
+    o = o || {};
+    row.classList.remove('pk-lifting');
+    const b = rel(row);
+    const clone = row.cloneNode(true);
+    clone.removeAttribute('id');
+    $$('[id]', clone).forEach((x) => x.removeAttribute('id'));
+    clone.classList.remove('pk-hold', 'pk-lifting', 'pk-pressed');
+    clone.classList.add('pk-lift-clone');
+    clone.dataset.name = 'Lifted row';
+    clone.style.cssText += ';left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px;background:' + (getComputedStyle(row).backgroundColor === 'rgba(0, 0, 0, 0)' ? 'var(--surface)' : getComputedStyle(row).backgroundColor);
+    const dim = dimLayer('pk-soft', () => ctl.close());
+    layer().append(clone);
+    const m = buildMenu(items, o, allowed(S.menu.submenus, o.key));
+    layer().append(m);
+    const W = screenW(), mh = m.offsetHeight, mw = m.offsetWidth;
+    let y = b.y + b.h * N.liftScale + 8;
+    if (y + mh > screenH() - 24) y = Math.max(12, b.y - mh - 8);
+    const x = Math.max(12, Math.min(W - mw - 12, b.x + 8));
+    m.style.left = x + 'px';
+    m.style.top = y + 'px';
+    m.style.setProperty('--pk-ox', '30px');
+    m.style.setProperty('--pk-oy', (y > b.y ? 0 : mh) + 'px');
+    m.style.setProperty('--pk-s0x', '0.3');
+    m.style.setProperty('--pk-s0y', '0.3');
+    void m.offsetWidth;
+    m.classList.add('pk-on');
+    const ctl = track({
+      el: m,
+      close() {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        unmorph(m);
+        clone.style.opacity = '0';
+        after(() => clone.remove(), dur('--dur-close'));
+        dropDim(dim, dur('--dur-close'));
+        emit(row, 'close');
+      },
+    });
+    m.addEventListener('click', (ev) => {
+      const bt = ev.target.closest('.pk-menu-item');
+      if (!bt || bt.disabled) return;
+      const it = m._items[+bt.dataset.i];
+      ctl.close();
+      emit(row, 'pick', { item: it, value: it.value != null ? it.value : it.label });
+      if (o.onPick) o.onPick(it);
+    });
+    return ctl;
+  }
+  function fireHold(row, instant) {
+    let opened = null;
+    const ev = emit(row, 'hold', {
+      instant: !!instant,
+      open: (items, o) => (opened = contextMenu(row, items, o)),
+    });
+    if (!opened) row.classList.remove('pk-lifting');
+    return ev;
+  }
+  const cancelHold = () => {
+    if (!hold) return;
+    clearTimeout(hold.t1);
+    clearTimeout(hold.t2);
+    hold.row.classList.remove('pk-lifting');
+    hold = null;
+  };
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const row = ev.target.closest && ev.target.closest('.pk-hold');
+    if (!row || ownedBy(ev.target, row)) return;
+    cancelHold();
+    const h = { row, x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+    h.t1 = later(() => {
+      if (hold === h && !motion.reduced()) row.classList.add('pk-lifting');
+    }, S.timing.lift);
+    h.t2 = later(() => {
+      if (hold !== h) return;
+      hold = null;
+      fireHold(row, false);
+      row._pkHeld = performance.now();
+    }, S.timing.hold);
+    hold = h;
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    if (!hold || ev.pointerId !== hold.id) return;
+    const s = scaleOf(hold.row);
+    if (Math.hypot((ev.clientX - hold.x) / s, (ev.clientY - hold.y) / s) > N.holdMove) cancelHold();
+  });
+  doc.addEventListener('pointerup', cancelHold);
+  doc.addEventListener('pointercancel', cancelHold);
+  doc.addEventListener('contextmenu', (ev) => {
+    const row = ev.target.closest && ev.target.closest('.pk-hold');
+    if (!row) return;
+    ev.preventDefault();
+    cancelHold();
+    fireHold(row, true);
+  });
+  // a tap that ends a hold isn't a click
+  doc.addEventListener('click', (ev) => {
+    const row = ev.target.closest && ev.target.closest('.pk-hold');
+    if (row && row._pkHeld && performance.now() - row._pkHeld < 600) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+  }, true);
+
+  /* (47) Parts.choices({ title, actions: [{ label, red, value }], cancel, key, name }) → Promise of the picked action's
+     value (its label if no value), or null for Cancel. An action sheet (choices 'actionSheet', D07) or a sheet. */
+  function choices(o) {
+    o = o || {};
+    const acts = o.actions || [];
+    return new Promise((resolve) => {
+      const done = (v) => resolve(v);
+      if (S.choices === 'sheet') {
+        let picked = null;
+        const sh = sheet({
+          key: o.key,
+          name: o.name || 'Choices',
+          title: o.title || '',
+          html: '<div class="pk-list">' + acts.map((a, i) => '<button class="pk-row pk-tap" data-i="' + i + '" style="' + (a.red ? 'color:var(--danger)' : 'color:var(--accent)') + '"><span class="pk-row-text">' + esc(a.label) + '</span></button>').join('') + '</div>',
+          onClose: () => done(picked),
+        });
+        sh.body.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-i]');
+          if (!b) return;
+          const a = acts[+b.dataset.i];
+          picked = a.value != null ? a.value : a.label;
+          sh.close('pick');
+        });
+        return;
+      }
+      const el = doc.createElement('div');
+      el.className = 'pk-actions';
+      el.dataset.name = nm(o, 'Action sheet');
+      el.setAttribute('role', 'dialog');
+      el.innerHTML =
+        '<div class="pk-actions-group pk-glass pk-strong">' + (o.title ? '<div class="pk-actions-title">' + esc(o.title) + '</div>' : '') +
+        acts.map((a, i) => '<button class="pk-action' + (a.red ? ' pk-red' : '') + '" data-i="' + i + '" data-name="Action: ' + esc(a.label) + '">' + esc(a.label) + '</button>').join('') +
+        '</div><div class="pk-actions-group pk-glass pk-strong"><button class="pk-action pk-cancel" data-i="-1" data-name="Cancel">' + esc(o.cancel || 'Cancel') + '</button></div>';
+      const dim = dimLayer('pk-soft', () => ctl.close(null));
+      layer().append(el);
+      void el.offsetWidth;
+      el.classList.add('pk-on');
+      const ctl = track({
+        el,
+        close(v) {
+          if (ctl.closed) return;
+          ctl.closed = true;
+          untrack(ctl);
+          el.classList.add('pk-leaving');
+          el.classList.remove('pk-on');
+          dropDim(dim, dur('--dur-rise'));
+          after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-rise'));
+          done(v === undefined ? null : v);
+        },
+      });
+      el.addEventListener('click', (ev) => {
+        const b = ev.target.closest('.pk-action');
+        if (!b) return;
+        const i = +b.dataset.i;
+        ctl.close(i < 0 ? null : acts[i].value != null ? acts[i].value : acts[i].label);
+      });
+    });
+  }
+
+  /* (48) Parts.confirm({ title, message, action: 'Delete', red: true, cancel: 'Cancel', name }) → Promise<boolean>.
+     An alert (confirm 'alert', D08: the app's own, never window.confirm) or a sheet. */
+  function confirmBox(o) {
+    o = o || {};
+    const red = o.red !== false;
+    return new Promise((resolve) => {
+      if (S.confirm === 'sheet') {
+        let yes = false;
+        const sh = sheet({
+          key: o.key,
+          name: o.name || 'Confirmation',
+          title: o.title || '',
+          html:
+            (o.message ? '<p class="pk-alert-text" style="text-align:center">' + esc(o.message) + '</p>' : '') +
+            '<div style="display:flex;flex-direction:column;gap:10px"><button class="pk-alert-btn ' + (red ? 'pk-red' : 'pk-blue') + '" data-a="yes">' + esc(o.action || 'OK') + '</button><button class="pk-alert-btn" data-a="no">' + esc(o.cancel || 'Cancel') + '</button></div>',
+          onClose: () => resolve(yes),
+        });
+        sh.body.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-a]');
+          if (!b) return;
+          yes = b.dataset.a === 'yes';
+          sh.close(yes ? 'yes' : 'no');
+        });
+        return;
+      }
+      const g = doc.createElement('div');
+      g.className = 'pk-alert pk-glass pk-strong';
+      g.dataset.name = nm(o, 'Alert');
+      g.setAttribute('role', 'alertdialog');
+      g.innerHTML =
+        '<p class="pk-alert-title">' + esc(o.title || '') + '</p>' + (o.message ? '<p class="pk-alert-text">' + esc(o.message) + '</p>' : '') +
+        '<div class="pk-alert-btns"><button class="pk-alert-btn" data-a="no" data-name="Cancel">' + esc(o.cancel || 'Cancel') + '</button><button class="pk-alert-btn ' + (red ? 'pk-red' : 'pk-blue') + '" data-a="yes" data-name="Action: ' + esc(o.action || 'OK') + '">' + esc(o.action || 'OK') + '</button></div>';
+      const dim = dimLayer('pk-soft');
+      layer().append(g);
+      void g.offsetWidth;
+      g.classList.add('pk-on');
+      const ctl = track({
+        el: g,
+        close(yes) {
+          if (ctl.closed) return;
+          ctl.closed = true;
+          untrack(ctl);
+          g.classList.add('pk-leaving');
+          g.classList.remove('pk-on');
+          dropDim(dim, dur('--dur-leave'));
+          after(() => g.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+          resolve(!!yes);
+        },
+      });
+      g.addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-a]');
+        if (b) ctl.close(b.dataset.a === 'yes');
+      });
+    });
+  }
+
+  /* (49) Parts.toast(text, { undo: fn, undoLabel, ms, name }) → { el, close() }: one at a time; a new one replaces it */
+  let toastNow = null;
+  function toast(text, o) {
+    o = o || {};
+    if (toastNow) toastNow.close();
+    const t = doc.createElement('div');
+    t.className = 'pk-toast pk-glass';
+    t.dataset.name = nm(o, 'Toast');
+    t.setAttribute('role', 'status');
+    t.innerHTML = '<span>' + esc(text) + '</span>' + (o.undo ? '<button class="pk-toast-undo" data-name="Undo">' + esc(o.undoLabel || 'Undo') + '</button>' : '');
+    layer().append(t);
+    void t.offsetWidth;
+    t.classList.add('pk-on');
+    const ctl = {
+      el: t,
+      close() {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        clearTimeout(ctl.timer);
+        if (toastNow === ctl) toastNow = null;
+        t.classList.add('pk-leaving');
+        t.classList.remove('pk-on');
+        after(() => t.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-toast-out'));
+      },
+    };
+    ctl.timer = later(ctl.close, o.ms || S.timing.toast);
+    const u = t.querySelector('.pk-toast-undo');
+    if (u)
+      u.addEventListener('click', () => {
+        ctl.close();
+        o.undo();
+      });
+    toastNow = ctl;
+    return ctl;
+  }
+
   /* ==PARTS== (each group below adds its part) */
 
   /* ============================================================================================================
@@ -1230,6 +1863,18 @@
     layer,
     rel,
     refresh: refreshAll,
+    sheet,
+    cover,
+    menu,
+    popover,
+    contextMenu,
+    choices,
+    confirm: confirmBox,
+    toast,
+    closeAll: () => open.slice().reverse().forEach((o) => o.close()),
+    get open() {
+      return open.length;
+    },
     html: {
       // the 8-spoke iOS spinner
       spinner: () => {

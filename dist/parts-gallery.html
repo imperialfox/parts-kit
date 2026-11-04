@@ -245,6 +245,8 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   --press: 0.93; /* solid buttons */
   --press-row: 0.98; /* rows, when row.press is 'shrink' */
   --pk-knob-grow: 1.35; /* a switch or slider knob while held */
+  --pk-lift-scale: 1.04; /* (M) a held row lifting before its menu */
+  --pk-recede: 0.971; /* (M) a menu behind its submenu */
 
   /* easings (fixed curves; the springs are --ease-gentle … published by the motion core) */
   --ease-pop: cubic-bezier(0.3, 1.7, 0.45, 1); /* the solid press settle */
@@ -279,6 +281,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
   --dur-glint: 500ms;
   --dur-progress: 600ms;
   --dur-spin: 1s;
+  --dur-rise: 350ms; /* action sheets rising */
   --dur-morph: 420ms; /* (M) a top bar button changing icon: the gel swell and the icons' blur */
 
   /* spring stand-ins until the motion core publishes the real ones (--ease-<name>, --dur-<name>) */
@@ -412,7 +415,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
 /* ===================================================================================================================
    FOUNDATIONS
    =================================================================================================================== */
-:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button, .pk-field-clear, button.pk-row, .pk-swipe-actions > button) {
+:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-alert-btn, .pk-toast-undo, .pk-seg > button, .pk-stepper > button, .pk-field-clear, button.pk-row, .pk-swipe-actions > button) {
   font: inherit;
   color: inherit;
   border: 0;
@@ -1605,6 +1608,484 @@ body > .pk-layer {
   cursor: grab;
   padding: 8px;
   margin: -8px;
+}
+
+/* ===================================================================================================================
+   OVERLAYS · made by Parts.sheet(), .cover(), .popover(), .menu(), .choices(), .confirm() and .toast()
+   =================================================================================================================== */
+
+/* (41, 42) sheet: rises from the bottom, 8 pt from the edges, corners following the screen's (--r-sheet, D17).
+   Drag it down from its header or, when its content is at the top, from the content; a flick faster than 700 pt/s
+   jumps a stop or closes it. With stops (sheet.withStops, D09): 45% and full (90 pt from the top), turning solid at
+   full. Growing to full screen (sheet.growsToFull, D10) covers the screen. Strong glass by default (sheet.glass, D15) */
+.pk-sheet {
+  position: absolute;
+  left: var(--pk-m, 8px);
+  right: var(--pk-m, 8px);
+  bottom: var(--pk-m, 8px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-sheet);
+  overflow: hidden;
+  touch-action: none;
+  translate: 0 var(--pk-y, 100%);
+  scale: var(--pk-shrink, 1);
+  --glass-blur: var(--pk-sheet-blur);
+  transition:
+    translate var(--dur-sheet) var(--ease-sheet),
+    left var(--dur-sheet) var(--ease-sheet),
+    right var(--dur-sheet) var(--ease-sheet),
+    bottom var(--dur-sheet) var(--ease-sheet),
+    scale var(--dur-sheet) var(--ease-sheet);
+}
+.pk-sheet.pk-leaving {
+  transition:
+    translate calc(var(--dur-leave) * var(--pk-speed)) var(--ease-accel),
+    opacity calc(var(--dur-leave) * var(--pk-speed)) var(--ease-accel);
+}
+.pk-sheet.pk-dragging {
+  transition:
+    left calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out),
+    right calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out),
+    bottom calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-sheet-solid {
+  position: absolute;
+  inset: 0;
+  background: var(--surface);
+  opacity: 0;
+  z-index: -1;
+  pointer-events: none;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-sheet.pk-solid-now .pk-sheet-solid {
+  opacity: 1;
+}
+.pk-sheet-head {
+  position: relative;
+  flex: none;
+  padding: 8px 16px 0;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pk-grabber {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: var(--pk-grab);
+}
+.pk-sheet-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  padding: 0 44px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-sheet-close {
+  position: absolute;
+  right: 12px;
+  top: 14px;
+}
+.pk-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 16px 24px;
+  touch-action: pan-y;
+}
+.pk-sheet-body.pk-at-top {
+  touch-action: none;
+}
+.motion-reduced :is(.pk-sheet, .pk-sheet.pk-leaving) {
+  scale: none;
+  transition:
+    translate 0s,
+    opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-out),
+    left 0s,
+    right 0s,
+    bottom 0s;
+}
+
+/* (43) full-screen cover: covers the whole screen, rising over 500 ms; ✕ closes it (sheet.fullScreen, D10) */
+.pk-cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: var(--r-sheet);
+  overflow: hidden;
+  translate: 0 100%;
+  transition: translate calc(var(--dur-cover) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-cover.pk-on {
+  translate: 0 0;
+}
+.pk-cover.pk-leaving {
+  transition: translate calc(var(--dur-leave) * var(--pk-speed)) var(--ease-accel);
+}
+.pk-cover .pk-bar-slot.pk-right {
+  z-index: 2;
+}
+.pk-cover-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: calc(var(--pk-bar-top) + 58px) 16px 30px;
+}
+.motion-reduced .pk-cover {
+  translate: 0 0;
+  opacity: 0;
+  transition: opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-out);
+}
+.motion-reduced .pk-cover.pk-on {
+  opacity: 1;
+}
+
+/* (44) popover and (16, 46) menus grow out of their button on the menu springs; their blur fades in over 260 ms
+   and stays while they close */
+.pk-morph {
+  position: absolute;
+  transform-origin: var(--pk-ox, 0px) var(--pk-oy, 0px);
+  scale: var(--pk-s0x, 0.2) var(--pk-s0y, 0.2);
+  opacity: 0;
+  -webkit-backdrop-filter: blur(var(--pk-ramp)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--pk-ramp)) saturate(var(--glass-sat));
+  transition:
+    scale var(--dur-menu-open) var(--ease-menu-open),
+    opacity calc(var(--dur-quick) * var(--pk-speed)) var(--ease-linear),
+    --pk-ramp calc(var(--dur-ramp) * var(--pk-speed)) var(--ease-lift);
+}
+.pk-morph.pk-on {
+  scale: 1;
+  opacity: 1;
+  --pk-ramp: var(--pk-blur-to, 22px);
+}
+.pk-morph.pk-leaving {
+  scale: var(--pk-s0x, 0.2) var(--pk-s0y, 0.2);
+  opacity: 0;
+  --pk-ramp: var(--pk-blur-to, 22px);
+  transition:
+    scale var(--dur-menu-close) var(--ease-menu-close),
+    opacity calc(var(--dur-close) * var(--pk-speed)) var(--ease-linear);
+}
+.motion-reduced .pk-morph {
+  scale: none;
+  --pk-ramp: var(--pk-blur-to, 22px);
+  transition: opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-linear);
+}
+/* one menu style everywhere: blur 22 over an 80% fill, corners --r-card (D16) */
+.pk-menu {
+  --pk-blur-to: var(--pk-menu-blur);
+  width: 250px;
+  max-width: calc(100% - 24px);
+  border-radius: var(--r-card);
+  background: var(--pk-menu);
+  box-shadow: inset 0 0 0 0.5px var(--pk-menu-line), var(--shadow-floating);
+  padding: 6px;
+  overflow: hidden;
+  color: var(--fg);
+  z-index: 2;
+}
+.pk-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-medium);
+  font-size: 17px;
+  text-align: left;
+  color: var(--fg);
+  transition:
+    background-color calc(var(--dur-lift-in) * var(--pk-speed)) var(--ease-decel),
+    opacity calc(var(--dur-recede) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-menu-item > span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-menu-item:active,
+.pk-menu-item.pk-hl {
+  background: var(--fill);
+}
+.pk-menu-item.pk-red {
+  color: var(--danger);
+}
+.pk-menu-item:disabled {
+  opacity: 0.4;
+}
+.pk-menu-sep {
+  height: 8px;
+  margin: 0 -6px;
+  background: var(--pk-menu-gap);
+}
+.pk-menu-label {
+  font-size: 13px;
+  color: var(--fg2);
+  padding: 8px 12px 4px;
+}
+.pk-menu.pk-recede {
+  scale: var(--pk-recede);
+  transition: scale calc(var(--dur-recede) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-menu.pk-recede .pk-menu-item {
+  opacity: 0.5;
+}
+/* (45, pinned) a submenu opens over its menu */
+.pk-submenu {
+  position: absolute;
+  -webkit-backdrop-filter: blur(var(--pk-menu-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--pk-menu-blur)) saturate(var(--glass-sat));
+  box-shadow: inset 0 0 0 0.5px var(--pk-menu-line), var(--shadow-floating);
+  scale: 0.92;
+  opacity: 0;
+  transform-origin: 50% 0;
+  z-index: 3;
+  transition:
+    scale calc(var(--dur-recede) * var(--pk-speed)) var(--ease-decel),
+    opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-submenu.pk-on {
+  scale: 1;
+  opacity: 1;
+}
+.pk-popover {
+  --pk-blur-to: var(--pk-popover-blur);
+  width: 240px;
+  border-radius: var(--r-large);
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 1.35;
+  background: var(--pk-popover);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), inset 0 1px 0.5px rgba(255, 255, 255, 0.2), var(--shadow-floating);
+  color: var(--fg);
+}
+.glass-solid .pk-popover {
+  background: var(--glass-strong);
+}
+/* (46) long-press: a held .pk-hold lifts from 200 ms (×1.04) and opens its menu at 700 ms, over a 20% / 25% dim
+   with no blur; the menu closes in 170 ms */
+.pk-hold {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: scale calc(var(--dur-lift-row) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-hold.pk-lifting {
+  scale: var(--pk-lift-scale);
+  z-index: 3;
+}
+.motion-reduced .pk-hold.pk-lifting {
+  scale: none;
+}
+.pk-lift-clone {
+  position: absolute;
+  margin: 0;
+  border-radius: var(--r-medium);
+  overflow: hidden;
+  scale: var(--pk-lift-scale);
+  box-shadow: var(--shadow-lifted);
+  pointer-events: none;
+  transition: opacity calc(var(--dur-close) * var(--pk-speed)) var(--ease-linear);
+}
+.motion-reduced .pk-lift-clone {
+  scale: none;
+}
+
+/* (47) action sheet: actions from the bottom, Cancel on its own (choices 'actionSheet', D07) */
+.pk-actions {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  translate: 0 110%;
+  transition: translate calc(var(--dur-rise) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-actions.pk-on {
+  translate: 0 0;
+}
+.pk-actions.pk-leaving {
+  translate: 0 110%;
+  transition-timing-function: var(--ease-accel);
+}
+.pk-actions-group {
+  border-radius: var(--r-actions);
+  overflow: hidden;
+}
+.pk-actions-title {
+  text-align: center;
+  font-size: 13px;
+  color: var(--fg2);
+  padding: 14px 16px 10px;
+}
+.pk-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 56px;
+  font-size: 20px;
+  color: var(--accent);
+}
+.pk-action:active {
+  background: var(--fill);
+}
+.pk-action + .pk-action::before,
+.pk-actions-title + .pk-action::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0.5px;
+  background: var(--sep);
+}
+.pk-action.pk-red {
+  color: var(--danger);
+}
+.pk-action.pk-cancel {
+  font-weight: 600;
+}
+
+/* (48) alert: a centred box with two capsule buttons; appears over 250 ms from ×1.1 (confirm 'alert', D08) */
+.pk-alert {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 300px;
+  max-width: calc(100% - 40px);
+  border-radius: var(--r-alert);
+  padding: 22px 18px 18px;
+  text-align: center;
+  translate: -50% -50%;
+  scale: 1.1;
+  opacity: 0;
+  transition:
+    scale calc(var(--dur-appear) * var(--pk-speed)) var(--ease-linear),
+    opacity calc(var(--dur-appear) * var(--pk-speed)) var(--ease-linear);
+}
+.pk-alert.pk-on {
+  scale: 1;
+  opacity: 1;
+}
+.pk-alert.pk-leaving {
+  scale: 1.05;
+  opacity: 0;
+  transition:
+    scale calc(var(--dur-leave) * var(--pk-speed)) var(--ease-linear),
+    opacity calc(var(--dur-leave) * var(--pk-speed)) var(--ease-linear);
+}
+.pk-alert-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.pk-alert-text {
+  font-size: 15px;
+  color: var(--fg2);
+  margin: 0 0 18px;
+  line-height: 1.35;
+}
+.pk-alert-btns {
+  display: flex;
+  gap: 10px;
+}
+.pk-alert-btn {
+  flex: 1;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--fill);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--fg);
+}
+.pk-alert-btn.pk-red {
+  background: var(--danger);
+  color: #fff;
+}
+.pk-alert-btn.pk-blue {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.motion-reduced :is(.pk-alert, .pk-alert.pk-leaving, .pk-actions, .pk-actions.pk-leaving) {
+  scale: none;
+  transition: opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-linear);
+}
+.motion-reduced .pk-actions {
+  translate: 0 0;
+  opacity: 0;
+}
+.motion-reduced .pk-actions.pk-on {
+  opacity: 1;
+}
+
+/* (49) toast: drops in from the top over 500 ms, stays 3 s (timing.toast), leaves upward over 350 ms; Undo where
+   something can be undone */
+.pk-toast {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--pk-bar-top) + 2px);
+  height: 50px;
+  min-width: 220px;
+  max-width: calc(100% - 32px);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 0 18px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--fg);
+  translate: -50% calc(-100% - 60px);
+  transition: translate calc(var(--dur-toast-in) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-toast.pk-on {
+  translate: -50% 0;
+}
+.pk-toast.pk-leaving {
+  translate: -50% calc(-100% - 60px);
+  transition: translate calc(var(--dur-toast-out) * var(--pk-speed)) var(--ease-accel);
+}
+.pk-toast > span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 10px;
+}
+.pk-toast-undo {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.motion-reduced .pk-toast {
+  translate: -50% 0;
+  opacity: 0;
+  transition: opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-linear);
+}
+.motion-reduced .pk-toast.pk-on {
+  opacity: 1;
 }
 
 </style>
@@ -4375,6 +4856,639 @@ body > .pk-layer {
   doc.addEventListener('pointerup', endReo);
   doc.addEventListener('pointercancel', endReo);
 
+  /* ============================================================================================================
+     OVERLAYS
+     ============================================================================================================ */
+  const closeBtn = (o, extra) =>
+    '<button class="pk-btn pk-circle pk-sm ' + (extra || 'pk-clear') + ' pk-press pk-sheet-close" data-name="' + nm({ name: o && o.closeName }, 'Close button') + '" aria-label="Close">' + icon('x', 18) + '</button>';
+  const content = (x) => (x == null ? '' : typeof x === 'string' ? x : '');
+  const place = (el, x) => {
+    if (x && x.nodeType === 1) el.append(x);
+  };
+
+  /* (41, 42) Parts.sheet({ title, html | node, key, name, closeName, onClose }) → { el, body, close(), grow(),
+     to(stop) }. key is the sheet's name in the settings: sheet.withStops gives it the 45% and full stops,
+     sheet.growsToFull lets grow() raise it to full screen, sheet.fullScreen opens it as a cover instead. */
+  function sheet(o) {
+    o = o || {};
+    if (allowed(S.sheet.fullScreen, o.key)) return cover(o);
+    const H = screenH();
+    const withStops = allowed(S.sheet.withStops, o.key);
+    const canGrow = allowed(S.sheet.growsToFull, o.key);
+    const el = doc.createElement('div');
+    el.className = 'pk-sheet pk-glass' + (S.sheet.glass === 'strong' ? ' pk-strong' : '');
+    el.dataset.name = nm(o, 'Sheet');
+    el.setAttribute('role', 'dialog');
+    el.innerHTML =
+      '<i class="pk-sheet-solid"></i><div class="pk-sheet-head"><i class="pk-grabber" data-name="Grabber"></i><div class="pk-sheet-title">' +
+      esc(o.title || '') + '</div>' + closeBtn(o) + '</div><div class="pk-sheet-body">' + content(o.html) + '</div>';
+    const body = el.querySelector('.pk-sheet-body');
+    place(body, o.html);
+    const dim = dimLayer('', () => ctl.close());
+    layer().append(el);
+    // the stops, as visible heights
+    const margin = 8;
+    let stops;
+    if (withStops) stops = [Math.round(H * N.medium), H - N.topInset];
+    else {
+      el.style.height = 'auto';
+      el.style.maxHeight = H - N.topInset + 'px';
+      el.style.setProperty('--pk-y', '0px');
+      el.style.visibility = 'hidden';
+      const h = Math.min(H - N.topInset, el.offsetHeight);
+      el.style.visibility = '';
+      el.style.maxHeight = '';
+      stops = [h];
+    }
+    const full = H;
+    let grown = false;
+    const tall = () => (canGrow ? full : stops[stops.length - 1]);
+    el.style.height = tall() + 'px';
+    let cur = stops[0];
+    const big = (h) => withStops && h >= H - N.topInset - 1;
+    function setAt(h, how) {
+      // how: 'snap' (spring), 'drag' (follows the finger), 'leave'
+      el.classList.toggle('pk-dragging', how === 'drag');
+      const m = big(h) || h >= full - 1 ? 0 : margin;
+      el.style.setProperty('--pk-m', m + 'px');
+      el.style.setProperty('--pk-y', (tall() - h + (m ? 0 : 0)).toFixed(1) + 'px');
+      el.classList.toggle('pk-solid-now', big(h) || h >= full - 1);
+    }
+    const ctl = track({
+      el,
+      body,
+      key: o.key,
+      get stop() {
+        return cur >= full - 1 ? 'full' : withStops && cur === stops[1] ? 'large' : withStops ? 'medium' : 'fit';
+      },
+      to(name) {
+        const h = name === 'full' ? (canGrow ? full : stops[stops.length - 1]) : name === 'large' && withStops ? stops[1] : stops[0];
+        cur = h;
+        if (h >= full - 1) grown = true;
+        setAt(h, 'snap');
+      },
+      grow() {
+        if (!canGrow) return false;
+        grown = true;
+        cur = full;
+        setAt(full, 'snap');
+        emit(el, 'grow');
+        return true;
+      },
+      close(why) {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        el.classList.add('pk-leaving');
+        el.classList.remove('pk-dragging');
+        if (motion.reduced()) el.style.opacity = '0';
+        else el.style.setProperty('--pk-y', tall() + margin + 20 + 'px');
+        dropDim(dim, dur('--dur-leave'));
+        after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+        emit(el, 'close', { why: why || 'close' });
+        if (o.onClose) o.onClose(why || 'close');
+      },
+    });
+    el.querySelector('.pk-sheet-close').addEventListener('click', () => ctl.close('button'));
+    // in: from below the screen to the first stop
+    el.style.setProperty('--pk-m', margin + 'px');
+    if (motion.reduced()) {
+      el.style.opacity = '0';
+      setAt(cur, 'snap');
+      void el.offsetWidth;
+      el.style.transition = 'opacity ' + dur('--dur-reduced') + 'ms';
+      el.style.opacity = '1';
+      after(() => (el.style.transition = ''), dur('--dur-reduced'));
+    } else {
+      el.style.setProperty('--pk-y', tall() + margin + 'px');
+      void el.offsetWidth;
+      setAt(cur, 'snap');
+    }
+    // the content tells the sheet when it's scrolled to the top (so a pull down there moves the sheet)
+    const atTop = () => body.classList.toggle('pk-at-top', body.scrollTop <= 0);
+    body.addEventListener('scroll', atTop, { passive: true });
+    atTop();
+    // dragging: from the header always; from the content when it's at the top
+    let d = null;
+    el.addEventListener('pointerdown', (ev) => {
+      if (ev.button > 0 || ctl.closed) return;
+      if (ev.target.closest('button, a, input, textarea, select, [data-own-gesture], .pk-switch, .pk-slider, .pk-seg, .pk-swipe-front, .pk-grip')) return;
+      const inBody = body.contains(ev.target);
+      if (inBody && body.scrollTop > 0) return;
+      d = { y: ev.clientY, id: ev.pointerId, base: cur, inBody, tr: tracker(), on: false, lastY: ev.clientY, gy: ev.clientY };
+    });
+    el.addEventListener('pointermove', (ev) => {
+      if (!d || ev.pointerId !== d.id) return;
+      const s = sc(), dy = (ev.clientY - d.y) / s;
+      const step = (ev.clientY - d.lastY) / s;
+      d.lastY = ev.clientY;
+      const top = tall();
+      // pulling up inside content that has more to show: scroll the content instead
+      if (d.inBody && !d.on && cur >= stops[stops.length - 1] - 1 && (step < 0 || body.scrollTop > 0) && body.scrollHeight > body.clientHeight + 1) {
+        body.scrollTop -= step;
+        return;
+      }
+      if (!d.on) {
+        if (Math.abs(dy) < 4) return;
+        d.on = true;
+        try {
+          el.setPointerCapture(ev.pointerId);
+        } catch (e) {}
+      }
+      let h = d.base - dy;
+      if (h > top) h = top + (h - top) * 0.08;
+      d.h = h;
+      d.tr.add(-h);
+      const lowest = stops[0];
+      if (S.sheet.dragShrink && h < lowest && !motion.reduced()) {
+        // (D14's alternative) shrink while dragged down: 1 − 0.64 × travel ÷ height, 1:1 to 0.48, then resisting to 0.33
+        const t = (lowest - h) / el.offsetHeight;
+        const k = N.shrink;
+        const sAt = t <= k.linear ? 1 - k.k * t : k.floor + (1 - k.k * k.linear - k.floor) * Math.exp(-(t - k.linear) * 3);
+        el.style.transformOrigin = '50% ' + (((d.gy - el.getBoundingClientRect().top) / s) | 0) + 'px';
+        el.style.setProperty('--pk-shrink', sAt.toFixed(4));
+      }
+      setAt(h, 'drag');
+    });
+    function up(ev) {
+      if (!d || ev.pointerId !== d.id) return;
+      const was = d;
+      d = null;
+      if (!was.on || was.h == null) return;
+      el.style.removeProperty('--pk-shrink');
+      const v = was.tr.v(); // pt/s, positive = downward
+      const h = was.h;
+      const all = [0].concat(stops, grown && canGrow ? [full] : []);
+      const i = Math.max(0, all.indexOf(was.base));
+      let target;
+      if (Math.abs(v) > N.flick) target = all[Math.max(0, Math.min(all.length - 1, i + (v > 0 ? -1 : 1)))];
+      else {
+        const dir = h < was.base ? -1 : 1, nx = all[Math.max(0, Math.min(all.length - 1, i + dir))];
+        target = nx !== was.base && Math.abs(h - was.base) >= N.snapAt * Math.abs(nx - was.base) ? nx : was.base;
+      }
+      if (target === 0) ctl.close('drag');
+      else {
+        cur = target;
+        setAt(target, 'snap');
+        emit(el, 'stop', { stop: ctl.stop });
+      }
+    }
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    emit(el, 'open', { key: o.key });
+    return ctl;
+  }
+
+  /* (43) Parts.cover({ title, html | node, name, onClose }) → { el, body, close() } */
+  function cover(o) {
+    o = o || {};
+    const el = doc.createElement('div');
+    el.className = 'pk-cover';
+    el.dataset.name = nm(o, 'Full-screen cover');
+    el.setAttribute('role', 'dialog');
+    el.innerHTML =
+      '<div class="pk-bar-slot pk-right">' + closeBtn(o, 'pk-glass').replace('pk-sm ', '') + '</div><div class="pk-cover-body">' +
+      (o.title ? '<h1 class="pk-large-title">' + esc(o.title) + '</h1>' : '') + content(o.html) + '</div>';
+    const body = el.querySelector('.pk-cover-body');
+    place(body, o.html);
+    layer().append(el);
+    void el.offsetWidth;
+    el.classList.add('pk-on');
+    const ctl = track({
+      el,
+      body,
+      key: o.key,
+      stop: 'full',
+      grow: () => false,
+      to() {},
+      close(why) {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        el.classList.add('pk-leaving');
+        el.classList.remove('pk-on');
+        after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+        emit(el, 'close', { why: why || 'close' });
+        if (o.onClose) o.onClose(why || 'close');
+      },
+    });
+    el.querySelector('.pk-sheet-close').addEventListener('click', () => ctl.close('button'));
+    emit(el, 'open', { key: o.key });
+    return ctl;
+  }
+
+  /* (16, 44) growing out of a button: place a panel next to its anchor and morph it out of the anchor */
+  function morphFrom(anchor, panel, where) {
+    layer().append(panel);
+    const b = rel(anchor), pw = panel.offsetWidth, ph = panel.offsetHeight, W = screenW(), Hh = screenH();
+    where = where || (b.x + b.w / 2 > (W * 2) / 3 ? 'right' : b.x + b.w / 2 < W / 3 ? 'left' : 'center');
+    let x = where === 'right' ? b.x + b.w - pw : where === 'center' ? b.x + b.w / 2 - pw / 2 : b.x;
+    x = Math.max(12, Math.min(W - pw - 12, x));
+    let y = b.y + b.h + 8;
+    if (y + ph > Hh - 24) y = Math.max(12, b.y - ph - 8);
+    panel.style.left = x + 'px';
+    panel.style.top = y + 'px';
+    panel.style.setProperty('--pk-ox', (b.x + b.w / 2 - x).toFixed(1) + 'px');
+    panel.style.setProperty('--pk-oy', (y > b.y ? 0 : ph) + 'px');
+    panel.style.setProperty('--pk-s0x', Math.min(1, b.w / pw).toFixed(3));
+    panel.style.setProperty('--pk-s0y', Math.min(1, b.h / ph).toFixed(3));
+    void panel.offsetWidth;
+    panel.classList.add('pk-on');
+  }
+  function unmorph(panel) {
+    panel.classList.remove('pk-on');
+    panel.classList.add('pk-leaving');
+    after(() => panel.remove(), Math.max(motion.spring('menu-close') * 0.6, dur('--dur-close'), motion.reduced() ? dur('--dur-reduced') : 0));
+  }
+
+  /* menus: items are { label, icon (svg text), red, disabled, value, sub: [items] } or '-' for a gap */
+  function menuRows(items, subsOn) {
+    return items
+      .map((it, i) => {
+        if (it === '-') return '<div class="pk-menu-sep"></div>';
+        if (it.sub && !subsOn)
+          return '<div class="pk-menu-label">' + esc(it.label) + '</div>' + menuRows(it.sub, false) + (i < items.length - 1 && items[i + 1] !== '-' ? '<div class="pk-menu-sep"></div>' : '');
+        return (
+          '<button class="pk-menu-item' + (it.red ? ' pk-red' : '') + '" data-i="' + i + '"' + (it.disabled ? ' disabled' : '') + ' data-name="Menu row: ' + esc(it.label) + '"><span>' +
+          esc(it.label) + '</span>' + (it.sub ? icon('chevR', 18) : it.icon || '') + '</button>'
+        );
+      })
+      .join('');
+  }
+  function flatItems(items, subsOn) {
+    // the item objects in the same order as their rows, for picking
+    const out = [];
+    items.forEach((it) => {
+      if (it === '-') return;
+      if (it.sub && !subsOn) out.push(...flatItems(it.sub, false));
+      else out.push(it);
+    });
+    return out;
+  }
+  function buildMenu(items, o, subsOn) {
+    const m = doc.createElement('div');
+    m.className = 'pk-menu pk-morph';
+    m.dataset.name = nm(o, 'Menu');
+    m.setAttribute('role', 'menu');
+    m.innerHTML = menuRows(items, subsOn);
+    // number the rows in order so a flattened submenu still picks the right item
+    const list = flatItems(items, subsOn);
+    $$('.pk-menu-item', m).forEach((b, i) => (b.dataset.i = i));
+    m._items = list;
+    return m;
+  }
+  /* Parts.menu(anchor, items, { key, name, place: 'left' | 'center' | 'right', onPick(item) }) → { el, close() }
+     (16) a pull-down menu growing out of its button. (45, pinned) items with sub open a submenu where
+     menu.submenus names the menu's key; elsewhere they're shown inline under a small label. */
+  function menu(anchor, items, o) {
+    o = o || {};
+    const subsOn = allowed(S.menu.submenus, o.key);
+    const m = buildMenu(items, o, subsOn);
+    let sub = null;
+    const dim = dimLayer('pk-clear-dim', () => ctl.close());
+    morphFrom(anchor, m, o.place);
+    const ctl = track({
+      el: m,
+      close() {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        unmorph(m);
+        if (sub) {
+          const sb = sub;
+          sb.classList.remove('pk-on');
+          after(() => sb.remove(), dur('--dur-fade'));
+        }
+        dropDim(dim, 0);
+        emit(anchor, 'close');
+      },
+    });
+    function pick(it, row) {
+      if (it.sub && subsOn) return openSub(it, row);
+      ctl.close();
+      emit(anchor, 'pick', { item: it, value: it.value != null ? it.value : it.label });
+      if (o.onPick) o.onPick(it);
+    }
+    function openSub(it) {
+      const sb = buildMenu([{ label: it.label, back: true }].concat(it.sub), { name: 'Submenu' }, false);
+      sb.classList.remove('pk-morph');
+      sb.classList.add('pk-submenu');
+      sb.firstChild.innerHTML = icon('chevL', 18) + '<span style="font-weight:600">' + esc(it.label) + '</span>';
+      layer().append(sb);
+      const r = rel(m);
+      sb.style.left = r.x + 10 + 'px';
+      sb.style.top = r.y + 26 + 'px';
+      m.classList.add('pk-recede');
+      void sb.offsetWidth;
+      sb.classList.add('pk-on');
+      sub = sb;
+      sb.addEventListener('click', (ev) => {
+        const b = ev.target.closest('.pk-menu-item');
+        if (!b) return;
+        const x = sb._items[+b.dataset.i];
+        if (x.back) {
+          m.classList.remove('pk-recede');
+          sb.classList.remove('pk-on');
+          after(() => sb.remove(), dur('--dur-recede'));
+          sub = null;
+          return;
+        }
+        pick(Object.assign({ parent: it.label }, x));
+      });
+      emit(anchor, 'submenu', { item: it });
+    }
+    m.addEventListener('click', (ev) => {
+      const b = ev.target.closest('.pk-menu-item');
+      if (b && !b.disabled) pick(m._items[+b.dataset.i], b);
+    });
+    emit(anchor, 'open');
+    return ctl;
+  }
+
+  /* (44) Parts.popover(anchor, html | node, { name }) → { el, close() }: grows out of its button; tap outside closes */
+  function popover(anchor, html, o) {
+    o = o || {};
+    const p = doc.createElement('div');
+    p.className = 'pk-popover pk-morph';
+    p.dataset.name = nm(o, 'Popover');
+    p.innerHTML = content(html);
+    place(p, html);
+    const dim = dimLayer('pk-clear-dim', () => ctl.close());
+    morphFrom(anchor, p, o.place || 'center');
+    const ctl = track({
+      el: p,
+      close() {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        unmorph(p);
+        dropDim(dim, 0);
+      },
+    });
+    return ctl;
+  }
+
+  /* (46) long-press: hold a .pk-hold. It lifts from timing.lift (200 ms) and at timing.hold (700 ms) sends pk:hold;
+     call ev.detail.open(items, { onPick, name }) in your listener to show its menu. Moving more than 10 pt or letting
+     go early cancels; right-click opens it at once. */
+  let hold = null;
+  function contextMenu(row, items, o) {
+    o = o || {};
+    row.classList.remove('pk-lifting');
+    const b = rel(row);
+    const clone = row.cloneNode(true);
+    clone.removeAttribute('id');
+    $$('[id]', clone).forEach((x) => x.removeAttribute('id'));
+    clone.classList.remove('pk-hold', 'pk-lifting', 'pk-pressed');
+    clone.classList.add('pk-lift-clone');
+    clone.dataset.name = 'Lifted row';
+    clone.style.cssText += ';left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px;background:' + (getComputedStyle(row).backgroundColor === 'rgba(0, 0, 0, 0)' ? 'var(--surface)' : getComputedStyle(row).backgroundColor);
+    const dim = dimLayer('pk-soft', () => ctl.close());
+    layer().append(clone);
+    const m = buildMenu(items, o, allowed(S.menu.submenus, o.key));
+    layer().append(m);
+    const W = screenW(), mh = m.offsetHeight, mw = m.offsetWidth;
+    let y = b.y + b.h * N.liftScale + 8;
+    if (y + mh > screenH() - 24) y = Math.max(12, b.y - mh - 8);
+    const x = Math.max(12, Math.min(W - mw - 12, b.x + 8));
+    m.style.left = x + 'px';
+    m.style.top = y + 'px';
+    m.style.setProperty('--pk-ox', '30px');
+    m.style.setProperty('--pk-oy', (y > b.y ? 0 : mh) + 'px');
+    m.style.setProperty('--pk-s0x', '0.3');
+    m.style.setProperty('--pk-s0y', '0.3');
+    void m.offsetWidth;
+    m.classList.add('pk-on');
+    const ctl = track({
+      el: m,
+      close() {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        untrack(ctl);
+        unmorph(m);
+        clone.style.opacity = '0';
+        after(() => clone.remove(), dur('--dur-close'));
+        dropDim(dim, dur('--dur-close'));
+        emit(row, 'close');
+      },
+    });
+    m.addEventListener('click', (ev) => {
+      const bt = ev.target.closest('.pk-menu-item');
+      if (!bt || bt.disabled) return;
+      const it = m._items[+bt.dataset.i];
+      ctl.close();
+      emit(row, 'pick', { item: it, value: it.value != null ? it.value : it.label });
+      if (o.onPick) o.onPick(it);
+    });
+    return ctl;
+  }
+  function fireHold(row, instant) {
+    let opened = null;
+    const ev = emit(row, 'hold', {
+      instant: !!instant,
+      open: (items, o) => (opened = contextMenu(row, items, o)),
+    });
+    if (!opened) row.classList.remove('pk-lifting');
+    return ev;
+  }
+  const cancelHold = () => {
+    if (!hold) return;
+    clearTimeout(hold.t1);
+    clearTimeout(hold.t2);
+    hold.row.classList.remove('pk-lifting');
+    hold = null;
+  };
+  doc.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0) return;
+    const row = ev.target.closest && ev.target.closest('.pk-hold');
+    if (!row || ownedBy(ev.target, row)) return;
+    cancelHold();
+    const h = { row, x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+    h.t1 = later(() => {
+      if (hold === h && !motion.reduced()) row.classList.add('pk-lifting');
+    }, S.timing.lift);
+    h.t2 = later(() => {
+      if (hold !== h) return;
+      hold = null;
+      fireHold(row, false);
+      row._pkHeld = performance.now();
+    }, S.timing.hold);
+    hold = h;
+  });
+  doc.addEventListener('pointermove', (ev) => {
+    if (!hold || ev.pointerId !== hold.id) return;
+    const s = scaleOf(hold.row);
+    if (Math.hypot((ev.clientX - hold.x) / s, (ev.clientY - hold.y) / s) > N.holdMove) cancelHold();
+  });
+  doc.addEventListener('pointerup', cancelHold);
+  doc.addEventListener('pointercancel', cancelHold);
+  doc.addEventListener('contextmenu', (ev) => {
+    const row = ev.target.closest && ev.target.closest('.pk-hold');
+    if (!row) return;
+    ev.preventDefault();
+    cancelHold();
+    fireHold(row, true);
+  });
+  // a tap that ends a hold isn't a click
+  doc.addEventListener('click', (ev) => {
+    const row = ev.target.closest && ev.target.closest('.pk-hold');
+    if (row && row._pkHeld && performance.now() - row._pkHeld < 600) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+  }, true);
+
+  /* (47) Parts.choices({ title, actions: [{ label, red, value }], cancel, key, name }) → Promise of the picked action's
+     value (its label if no value), or null for Cancel. An action sheet (choices 'actionSheet', D07) or a sheet. */
+  function choices(o) {
+    o = o || {};
+    const acts = o.actions || [];
+    return new Promise((resolve) => {
+      const done = (v) => resolve(v);
+      if (S.choices === 'sheet') {
+        let picked = null;
+        const sh = sheet({
+          key: o.key,
+          name: o.name || 'Choices',
+          title: o.title || '',
+          html: '<div class="pk-list">' + acts.map((a, i) => '<button class="pk-row pk-tap" data-i="' + i + '" style="' + (a.red ? 'color:var(--danger)' : 'color:var(--accent)') + '"><span class="pk-row-text">' + esc(a.label) + '</span></button>').join('') + '</div>',
+          onClose: () => done(picked),
+        });
+        sh.body.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-i]');
+          if (!b) return;
+          const a = acts[+b.dataset.i];
+          picked = a.value != null ? a.value : a.label;
+          sh.close('pick');
+        });
+        return;
+      }
+      const el = doc.createElement('div');
+      el.className = 'pk-actions';
+      el.dataset.name = nm(o, 'Action sheet');
+      el.setAttribute('role', 'dialog');
+      el.innerHTML =
+        '<div class="pk-actions-group pk-glass pk-strong">' + (o.title ? '<div class="pk-actions-title">' + esc(o.title) + '</div>' : '') +
+        acts.map((a, i) => '<button class="pk-action' + (a.red ? ' pk-red' : '') + '" data-i="' + i + '" data-name="Action: ' + esc(a.label) + '">' + esc(a.label) + '</button>').join('') +
+        '</div><div class="pk-actions-group pk-glass pk-strong"><button class="pk-action pk-cancel" data-i="-1" data-name="Cancel">' + esc(o.cancel || 'Cancel') + '</button></div>';
+      const dim = dimLayer('pk-soft', () => ctl.close(null));
+      layer().append(el);
+      void el.offsetWidth;
+      el.classList.add('pk-on');
+      const ctl = track({
+        el,
+        close(v) {
+          if (ctl.closed) return;
+          ctl.closed = true;
+          untrack(ctl);
+          el.classList.add('pk-leaving');
+          el.classList.remove('pk-on');
+          dropDim(dim, dur('--dur-rise'));
+          after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-rise'));
+          done(v === undefined ? null : v);
+        },
+      });
+      el.addEventListener('click', (ev) => {
+        const b = ev.target.closest('.pk-action');
+        if (!b) return;
+        const i = +b.dataset.i;
+        ctl.close(i < 0 ? null : acts[i].value != null ? acts[i].value : acts[i].label);
+      });
+    });
+  }
+
+  /* (48) Parts.confirm({ title, message, action: 'Delete', red: true, cancel: 'Cancel', name }) → Promise<boolean>.
+     An alert (confirm 'alert', D08: the app's own, never window.confirm) or a sheet. */
+  function confirmBox(o) {
+    o = o || {};
+    const red = o.red !== false;
+    return new Promise((resolve) => {
+      if (S.confirm === 'sheet') {
+        let yes = false;
+        const sh = sheet({
+          key: o.key,
+          name: o.name || 'Confirmation',
+          title: o.title || '',
+          html:
+            (o.message ? '<p class="pk-alert-text" style="text-align:center">' + esc(o.message) + '</p>' : '') +
+            '<div style="display:flex;flex-direction:column;gap:10px"><button class="pk-alert-btn ' + (red ? 'pk-red' : 'pk-blue') + '" data-a="yes">' + esc(o.action || 'OK') + '</button><button class="pk-alert-btn" data-a="no">' + esc(o.cancel || 'Cancel') + '</button></div>',
+          onClose: () => resolve(yes),
+        });
+        sh.body.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-a]');
+          if (!b) return;
+          yes = b.dataset.a === 'yes';
+          sh.close(yes ? 'yes' : 'no');
+        });
+        return;
+      }
+      const g = doc.createElement('div');
+      g.className = 'pk-alert pk-glass pk-strong';
+      g.dataset.name = nm(o, 'Alert');
+      g.setAttribute('role', 'alertdialog');
+      g.innerHTML =
+        '<p class="pk-alert-title">' + esc(o.title || '') + '</p>' + (o.message ? '<p class="pk-alert-text">' + esc(o.message) + '</p>' : '') +
+        '<div class="pk-alert-btns"><button class="pk-alert-btn" data-a="no" data-name="Cancel">' + esc(o.cancel || 'Cancel') + '</button><button class="pk-alert-btn ' + (red ? 'pk-red' : 'pk-blue') + '" data-a="yes" data-name="Action: ' + esc(o.action || 'OK') + '">' + esc(o.action || 'OK') + '</button></div>';
+      const dim = dimLayer('pk-soft');
+      layer().append(g);
+      void g.offsetWidth;
+      g.classList.add('pk-on');
+      const ctl = track({
+        el: g,
+        close(yes) {
+          if (ctl.closed) return;
+          ctl.closed = true;
+          untrack(ctl);
+          g.classList.add('pk-leaving');
+          g.classList.remove('pk-on');
+          dropDim(dim, dur('--dur-leave'));
+          after(() => g.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+          resolve(!!yes);
+        },
+      });
+      g.addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-a]');
+        if (b) ctl.close(b.dataset.a === 'yes');
+      });
+    });
+  }
+
+  /* (49) Parts.toast(text, { undo: fn, undoLabel, ms, name }) → { el, close() }: one at a time; a new one replaces it */
+  let toastNow = null;
+  function toast(text, o) {
+    o = o || {};
+    if (toastNow) toastNow.close();
+    const t = doc.createElement('div');
+    t.className = 'pk-toast pk-glass';
+    t.dataset.name = nm(o, 'Toast');
+    t.setAttribute('role', 'status');
+    t.innerHTML = '<span>' + esc(text) + '</span>' + (o.undo ? '<button class="pk-toast-undo" data-name="Undo">' + esc(o.undoLabel || 'Undo') + '</button>' : '');
+    layer().append(t);
+    void t.offsetWidth;
+    t.classList.add('pk-on');
+    const ctl = {
+      el: t,
+      close() {
+        if (ctl.closed) return;
+        ctl.closed = true;
+        clearTimeout(ctl.timer);
+        if (toastNow === ctl) toastNow = null;
+        t.classList.add('pk-leaving');
+        t.classList.remove('pk-on');
+        after(() => t.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-toast-out'));
+      },
+    };
+    ctl.timer = later(ctl.close, o.ms || S.timing.toast);
+    const u = t.querySelector('.pk-toast-undo');
+    if (u)
+      u.addEventListener('click', () => {
+        ctl.close();
+        o.undo();
+      });
+    toastNow = ctl;
+    return ctl;
+  }
+
   /* ==PARTS== (each group below adds its part) */
 
   /* ============================================================================================================
@@ -4400,6 +5514,18 @@ body > .pk-layer {
     layer,
     rel,
     refresh: refreshAll,
+    sheet,
+    cover,
+    menu,
+    popover,
+    contextMenu,
+    choices,
+    confirm: confirmBox,
+    toast,
+    closeAll: () => open.slice().reverse().forEach((o) => o.close()),
+    get open() {
+      return open.length;
+    },
     html: {
       // the 8-spoke iOS spinner
       spinner: () => {
@@ -4434,7 +5560,7 @@ const $$ = (s, r) => Array.from((r || app).querySelectorAll(s));
 
 /* ---------- the gallery's settings: the kit's defaults, with the pinned parts switched on for their demos ---------- */
 const PINNED = { menu: { submenus: ['options'] }, glass: { appear: ['star'] }, press: { glint: ['pad'] } };
-Parts.settings(Object.assign({ app: 'Parts gallery', root: '#app' }, PINNED));
+Parts.settings(Object.assign({ app: 'Parts gallery', root: '#app', sheet: { withStops: ['stops', 'grows'], growsToFull: ['grows'], fullScreen: ['cover'] } }, PINNED));
 
 /* ---------- icons ---------- */
 const PATHS = {
@@ -4562,6 +5688,26 @@ H += part(39, 'Swipe actions', 'e', 'Swipe a row left to show Flag and an 88 pt 
 H += part(40, 'Reorderable list', 'e', 'Hold the handle and drag to reorder. <code>.pk-reorder</code> with a <code>.pk-grip</code> per row',
   `<div class="pk-list pk-reorder" id="reo" data-name="Reorder list">${['Warm up', 'Main set', 'Cool down', 'Stretch'].map(t => `<div class="pk-row" data-name="Row: ${t}"><span class="pk-row-text">${t}</span><span class="pk-grip" data-name="Handle">${ic('grip', 20)}</span></div>`).join('')}</div>`);
 
+
+const openBtn = (id, label) => `<button class="pk-btn pk-cta pk-glass pk-tinted pk-press" id="${id}" data-name="Button: ${label}">${label}</button>`;
+H += sec('overlays', 'Overlays');
+H += part(41, 'Sheet', 'mx', 'Rises from the bottom, 8 pt from the edges, corners following the screen\'s (46, D17). Drag it down from the top or, when its content is at the top, from the content; a flick faster than 700 pt/s closes it. Dim 54%. Strong glass (<code>sheet.glass</code>, D15); <code>sheet.dragShrink</code> (D14) makes it shrink while dragged. <code>Parts.sheet({…})</code>',
+  `<div class="gal-row">${openBtn('o-sheet', 'Open sheet')}</div>`);
+H += part(42, 'Sheet with stops, and growing to full', 'mx', 'Stops at 45% and full (90 pt from the top); a flick faster than 700 pt/s jumps a stop, otherwise it snaps 40% of the way. It turns solid at full. A sheet named in <code>sheet.growsToFull</code> (D10) grows to full screen when its content needs room. Names in <code>sheet.withStops</code> (D09).',
+  `<div class="gal-row">${openBtn('o-stops', 'Sheet with stops')}${openBtn('o-grows', 'Sheet that grows')}</div>`);
+H += part(43, 'Full-screen cover', 'e', 'Covers the whole screen, rising over 500 ms. ✕ closes it. A sheet named in <code>sheet.fullScreen</code> (D10) opens as a cover. <code>Parts.cover({…})</code>',
+  `<div class="gal-row">${openBtn('o-cover', 'Open cover')}</div>`);
+H += part(44, 'Popover', 'e', 'Grows out of its button on the menu springs; its blur fades in over 260 ms. Tap outside to close. <code>Parts.popover(button, html)</code>',
+  stage(`<button class="pk-btn pk-pill pk-glass pk-press" id="o-pop" data-name="Button: Show popover">${ic('bell', 18)} Show popover</button>`));
+H += part(46, 'Long-press menu', 'm', 'Hold a row. At 200 ms it lifts, growing to ×1.04; at 700 ms the menu opens (<code>timing.hold</code>). Dim 20% in light, 25% in dark, no blur. Closes in 170 ms. Moving more than 10 pt cancels; right-click opens it at once. Same menu style as pull-downs (16). <code>.pk-hold</code> and <code>pk:hold</code>',
+  `<div class="pk-list" id="ctxList" data-name="Long-press list">${['Morning notes', 'Weekly plan', 'Recipes'].map(t => `<div class="pk-row pk-hold" data-name="Row: ${t}"><span class="pk-row-text">${t}<small>Hold me</small></span></div>`).join('')}</div>`);
+H += part(47, 'Action sheet', 'e', 'A list of actions from the bottom, with Cancel on its own (<code>choices</code> actionSheet, D07; or a sheet). <code>Parts.choices({…})</code>',
+  `<div class="gal-row">${openBtn('o-as', 'Show actions')}</div>`);
+H += part(48, 'Alert', 'e', 'A centred box with two capsule buttons. Appears over 250 ms, scaling from 1.1 (<code>confirm</code> alert, D08; or a sheet). Never the browser\'s own confirm. <code>Parts.confirm({…})</code>',
+  `<div class="gal-row">${openBtn('o-dlg', 'Delete…')}</div>`);
+H += part(49, 'Toast', 'e', 'Drops in from the top over 500 ms, stays 3 s (<code>timing.toast</code>), then leaves upward over 350 ms. Undo where something can be undone. <code>Parts.toast(text, {undo})</code>',
+  `<div class="gal-row">${openBtn('o-toast', 'Show toast')}</div>`);
+
 /* ==SECTIONS== */
 
 H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in 1.0: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
@@ -4609,6 +5755,21 @@ $('#vol').addEventListener('pk:input', e => $('#slv').textContent = Math.round(e
 
 /* ---------- demos: lists ---------- */
 $$('.pk-swipe-actions button').forEach(b => b.addEventListener('click', () => { const t = b.closest('.pk-swipe').querySelector('.pk-swipe-front').textContent; if (Parts.toast) Parts.toast(b.dataset.a === 'delete' ? `Deleted “${t}”` : 'Flagged', b.dataset.a === 'delete' ? { undo: () => Parts.toast('Undone') } : null); }));
+
+
+/* ---------- demos: overlays ---------- */
+const filler = n => `<div class="pk-list" style="margin-top:14px">${Array.from({ length: n }, (_, i) => `<div class="pk-row"><span class="pk-row-text">Row ${i + 1}</span></div>`).join('')}</div>`;
+$('#o-sheet').addEventListener('click', () => Parts.sheet({ title: 'Sheet', name: 'Sheet', html: `<p class="gal-sub" style="text-align:center">Drag me down from here or the top, or flick, to close.</p>${filler(3)}` }));
+$('#o-stops').addEventListener('click', () => Parts.sheet({ key: 'stops', title: 'Sheet with stops', name: 'Sheet with stops', html: `<p class="gal-sub" id="stopTxt">At 45%. Drag up for full, down to close. At full, scroll the rows, then pull down from the top of them.</p>${filler(16)}` }));
+$('#o-grows').addEventListener('click', () => { const sh = Parts.sheet({ key: 'grows', title: 'New item', name: 'Sheet that grows',
+  html: `<p class="gal-sub">Opens at 45%. Choosing Fill in raises it to full screen, where it reads as a cover.</p><div class="pk-list" style="margin-top:12px"><button class="pk-row pk-tap" id="growBtn"><span class="pk-row-text" style="color:var(--accent)">Fill in by hand</span>${chev}</button></div>${filler(10)}` });
+  sh.body.querySelector('#growBtn').addEventListener('click', () => sh.grow()); });
+$('#o-cover').addEventListener('click', () => Parts.sheet({ key: 'cover', title: 'Cover', name: 'Full-screen cover', html: `<p class="gal-sub">Covers the whole screen, tab bar included. ✕ closes it.</p>` }));
+$('#o-pop').addEventListener('click', () => Parts.popover($('#o-pop'), `<b style="display:block;font-size:17px;margin-bottom:4px">Popover</b>Grows out of its button. Blur 10 at 12% white, fading in over 260 ms. Tap outside to close.`));
+$('#ctxList').addEventListener('pk:hold', e => e.detail.open([{ label: 'Copy', icon: ic('copy', 18) }, { label: 'Share', icon: ic('share', 18) }, { label: 'Favourite', icon: ic('heart', 18) }, '-', { label: 'Delete', icon: ic('trash', 18), red: true }], { name: 'Long-press menu', onPick: it => Parts.toast(it.label) }));
+$('#o-as').addEventListener('click', () => Parts.choices({ title: 'What would you like to do with “Weekly plan”?', actions: [{ label: 'Duplicate' }, { label: 'Move to folder' }, { label: 'Delete', red: true }] }).then(v => { if (v) Parts.toast(v === 'Delete' ? 'Deleted “Weekly plan”' : v, v === 'Delete' ? { undo: () => Parts.toast('Undone') } : null); }));
+$('#o-dlg').addEventListener('click', () => Parts.confirm({ title: 'Delete “Weekly plan”?', message: "This can't be undone.", action: 'Delete' }).then(yes => { if (yes) Parts.toast('Deleted “Weekly plan”'); }));
+$('#o-toast').addEventListener('click', () => Parts.toast('Saved to Library', { undo: () => Parts.toast('Undone') }));
 
 /* ==BEHAVIOUR== */
 

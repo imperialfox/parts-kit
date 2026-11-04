@@ -434,6 +434,142 @@ def lists(page):
     ok(order == ["Main set", "Cool down", "Warm up", "Stretch"], f"40: holding the handle and dragging reorders ({order})")
 
 
+def visible(page, sel=".pk-sheet"):
+    return page.evaluate(f"(() => {{ const a = document.querySelector('#app').getBoundingClientRect(), s = document.querySelector('{sel}:not(.pk-leaving)'); if (!s) return -1; return a.bottom - s.getBoundingClientRect().top; }})()")
+
+
+def gone(page, sel):
+    page.wait_for_timeout(450)
+    return page.evaluate(f"document.querySelectorAll('{sel}').length") == 0
+
+
+@behaviour
+def overlays(page):
+    page.evaluate("Parts.motion.setSpeed(0)")
+    H = page.evaluate("document.querySelector('#app').offsetHeight")
+    # 41: a sheet fitting its content; drag down past 40% to close
+    scroll_to(page, "#p41"); page.click("#o-sheet")
+    v = visible(page)
+    ok(80 < v < H * 0.6, f"41: the sheet opens at its content's height ({v})")
+    ok(page.evaluate("document.querySelector('.pk-sheet').classList.contains('pk-strong')"), "41/D15: sheets use the strong glass")
+    top = page.locator(".pk-sheet").bounding_box()["y"]
+    drag(page, 200, top + 20, 200, top + 20 + v * 0.6, steps=30)
+    ok(gone(page, ".pk-sheet"), "41: dragging a sheet down past 40% closes it")
+    # a short quick flick closes it too
+    page.click("#o-sheet"); top = page.locator(".pk-sheet").bounding_box()["y"]
+    page.mouse.move(200, top + 20); page.mouse.down(); page.mouse.move(200, top + 30); page.mouse.move(200, top + 55); page.mouse.up()
+    ok(gone(page, ".pk-sheet"), "41: a quick flick down closes the sheet")
+    # pull down from the content
+    page.click("#o-sheet"); b = page.locator(".pk-sheet .pk-sheet-body .pk-row").nth(1).bounding_box()
+    drag(page, 200, b["y"] + 10, 200, b["y"] + 260, steps=30)
+    ok(gone(page, ".pk-sheet"), "41/D17: pulling down from the content (at its top) closes the sheet")
+    # D14 both ways: dragging shrinks only with sheet.dragShrink
+    page.evaluate("Kit.set('Sheet drag (D14)', 1)")
+    page.click("#o-sheet"); top = page.locator(".pk-sheet").bounding_box()["y"]
+    drag(page, 200, top + 20, 200, top + 140, steps=20, release=False)
+    sh = page.evaluate("document.querySelector('.pk-sheet').style.getPropertyValue('--pk-shrink')")
+    page.mouse.up(); page.wait_for_timeout(400)
+    page.evaluate("Kit.set('Sheet drag (D14)', 0)")
+    page.click("#o-sheet"); top = page.locator(".pk-sheet").bounding_box()["y"]
+    drag(page, 200, top + 20, 200, top + 140, steps=20, release=False)
+    sh0 = page.evaluate("document.querySelector('.pk-sheet').style.getPropertyValue('--pk-shrink')")
+    page.mouse.up(); page.wait_for_timeout(400)
+    ok(sh and float(sh) < 0.95 and sh0 == "", f"D14: the sheet shrinks while dragged only with sheet.dragShrink ({sh}, {sh0!r})")
+    page.evaluate("Parts.closeAll()"); page.wait_for_timeout(400)
+    # D15 both ways
+    page.evaluate("Kit.set('Sheet glass (D15)', 1)"); page.click("#o-sheet")
+    reg = not page.evaluate("document.querySelector('.pk-sheet').classList.contains('pk-strong')")
+    page.evaluate("Parts.closeAll()"); page.evaluate("Kit.set('Sheet glass (D15)', 0)"); page.wait_for_timeout(400)
+    ok(reg, "D15: with sheet.glass 'regular' the sheet uses the regular glass")
+    # 42: stops at 45% and full; content scrolls at full, then pulls the sheet down from its top
+    scroll_to(page, "#p42"); page.click("#o-stops")
+    v = visible(page)
+    ok(abs(v - (H * 0.45 + 8)) < 6, f"42/D09: a sheet with stops opens at 45% ({v} of {H})")
+    top = page.locator(".pk-sheet").bounding_box()["y"]
+    drag(page, 200, top + 20, 200, top - 250, steps=25)
+    v2 = visible(page)
+    ok(abs(v2 - (H - 90)) < 3 and page.evaluate("document.querySelector('.pk-sheet').classList.contains('pk-solid-now')"), f"42: dragging up reaches the full stop and turns solid ({v2})")
+    body = page.locator(".pk-sheet-body").bounding_box()
+    drag(page, 200, body["y"] + 300, 200, body["y"] + 100, steps=15)
+    st = page.evaluate("document.querySelector('.pk-sheet-body').scrollTop")
+    ok(st > 100 and abs(visible(page) - (H - 90)) < 3, f"42: at full, dragging up the content scrolls it ({st})")
+    page.evaluate("document.querySelector('.pk-sheet-body').scrollTop = 0; document.querySelector('.pk-sheet-body').dispatchEvent(new Event('scroll'))")
+    drag(page, 200, body["y"] + 100, 200, body["y"] + 300, steps=25)
+    v3 = visible(page)
+    ok(abs(v3 - (H * 0.45 + 8)) < 6, f"42: pulling down from the top of the content goes back to 45% ({v3})")
+    top = page.locator(".pk-sheet").bounding_box()["y"]
+    page.mouse.move(200, top + 20); page.mouse.down(); page.mouse.move(200, top + 12); page.mouse.move(200, top - 20); page.mouse.up()
+    ok(abs(visible(page) - (H - 90)) < 3, "42: a quick flick up jumps to the next stop")
+    page.evaluate("Parts.closeAll()"); page.wait_for_timeout(400)
+    # 42/D10: growing to full
+    page.click("#o-grows"); page.click("#growBtn")
+    vg = visible(page)
+    ok(abs(vg - H) < 2, f"42/D10: a sheet in growsToFull grows to full screen ({vg})")
+    page.evaluate("Parts.closeAll()"); page.wait_for_timeout(400)
+    # 43: a sheet in fullScreen opens as a cover
+    scroll_to(page, "#p43"); page.click("#o-cover")
+    ok(page.evaluate("!!document.querySelector('.pk-cover.pk-on') && document.querySelector('.pk-cover').getBoundingClientRect().top === document.querySelector('#app').getBoundingClientRect().top"), "43/D10: a sheet in fullScreen opens as a full-screen cover")
+    page.click(".pk-cover .pk-sheet-close")
+    ok(gone(page, ".pk-cover"), "43: ✕ closes the cover")
+    # 16: pull-down menu grows from its button and closes on a pick
+    scroll_to(page, "#p16"); page.click("#pullBtn")
+    r = page.evaluate("(() => { const m = document.querySelector('.pk-menu'); if (!m) return null; const s = getComputedStyle(m); return { r: s.borderTopLeftRadius, items: m.querySelectorAll('.pk-menu-item').length }; })()")
+    ok(r and r["r"] == "20px" and r["items"] == 4, f"16/D16: a pull-down menu opens, corners 20 ({r})")
+    page.click(".pk-menu .pk-menu-item >> nth=1")
+    ok(gone(page, ".pk-menu") and page.evaluate("!!document.querySelector('.pk-toast')"), "16: picking closes the menu")
+    # 44 popover
+    scroll_to(page, "#p44"); page.click("#o-pop")
+    ok(page.evaluate("!!document.querySelector('.pk-popover.pk-on')"), "44: the popover grows out of its button")
+    page.mouse.click(30, 300)
+    ok(gone(page, ".pk-popover"), "44: tapping outside closes it")
+    # 46: long-press timing — no menu before 700 ms
+    page.evaluate("Parts.motion.setSpeed(1)")
+    scroll_to(page, "#p46")
+    x, y = center(page, "#ctxList .pk-hold >> nth=1")
+    page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(330)
+    lifted = page.evaluate("document.querySelectorAll('#ctxList .pk-hold')[1].classList.contains('pk-lifting')")
+    page.wait_for_timeout(280)
+    early = page.evaluate("!!document.querySelector('.pk-menu')")
+    page.wait_for_timeout(250)
+    late = page.evaluate("!!document.querySelector('.pk-menu')")
+    page.mouse.up()
+    ok(lifted, "46: the held row lifts from 200 ms")
+    ok(not early and late, f"46: no menu before 700 ms, then the menu ({early}, {late})")
+    ok(page.evaluate("!!document.querySelector('.pk-lift-clone') && getComputedStyle(document.querySelector('.pk-dim.pk-soft')).backgroundColor") == "rgba(0, 0, 0, 0.2)", "46: the row stays above a 20% dim with no blur")
+    page.mouse.click(30, 120)
+    ok(gone(page, ".pk-menu"), "46: tapping outside closes it")
+    page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(300); page.mouse.move(x + 30, y); page.wait_for_timeout(600)
+    ok(not page.evaluate("!!document.querySelector('.pk-menu')"), "46: moving more than 10 pt cancels")
+    page.mouse.up()
+    page.evaluate("Parts.motion.setSpeed(0)")
+    # 47: action sheet, and D07 as a sheet
+    scroll_to(page, "#p47"); page.click("#o-as")
+    ok(page.evaluate("document.querySelectorAll('.pk-actions .pk-action').length") == 4, "47/D07: choices open as an action sheet with Cancel apart")
+    page.click(".pk-action >> nth=0")
+    ok(gone(page, ".pk-actions") and "Duplicate" in page.inner_text(".pk-toast"), "47: picking an action closes it and returns the action")
+    page.evaluate("Kit.set('Choices (D07)', 1)"); page.click("#o-as")
+    ok(page.evaluate("!!document.querySelector('.pk-sheet') && !document.querySelector('.pk-actions')"), "D07: with choices 'sheet' they open as a sheet")
+    page.evaluate("Parts.closeAll()"); page.evaluate("Kit.set('Choices (D07)', 0)"); page.wait_for_timeout(400)
+    # 48: alert, and D08 as a sheet
+    scroll_to(page, "#p48"); page.click("#o-dlg")
+    ok(page.evaluate("!!document.querySelector('.pk-alert.pk-on') && getComputedStyle(document.querySelector('.pk-alert .pk-red')).backgroundColor !== ''"), "48/D08: confirmations open as an alert with a red action")
+    page.click(".pk-alert [data-a='yes']")
+    ok(gone(page, ".pk-alert") and "Deleted" in page.inner_text(".pk-toast"), "48: the red action confirms")
+    page.evaluate("Kit.set('Confirm (D08)', 1)"); page.click("#o-dlg")
+    ok(page.evaluate("!!document.querySelector('.pk-sheet [data-a=yes]') && !document.querySelector('.pk-alert')"), "D08: with confirm 'sheet' it opens as a sheet")
+    page.evaluate("Parts.closeAll()"); page.evaluate("Kit.set('Confirm (D08)', 0)"); page.wait_for_timeout(400)
+    # 49: toast timing (3 s), at normal speed
+    page.evaluate("Parts.motion.setSpeed(1)")
+    scroll_to(page, "#p49"); page.click("#o-toast")
+    page.wait_for_timeout(600)
+    shown = page.evaluate("(() => { const t = document.querySelector('.pk-toast'); return !!t && t.getBoundingClientRect().top > document.querySelector('#app').getBoundingClientRect().top; })()")
+    page.wait_for_timeout(2100)
+    still = page.evaluate("document.querySelectorAll('.pk-toast:not(.pk-leaving)').length")
+    page.wait_for_timeout(900)
+    after3 = page.evaluate("document.querySelectorAll('.pk-toast').length")
+    ok(shown and still == 1 and after3 == 0, f"49: the toast drops in, stays 3 s, then leaves ({shown}, {still}, {after3})")
+
+
 def main():
     shots = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else KIT / "shots").resolve()
     shots.mkdir(parents=True, exist_ok=True)

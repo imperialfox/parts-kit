@@ -77,6 +77,8 @@
   --press: 0.93; /* solid buttons */
   --press-row: 0.98; /* rows, when row.press is 'shrink' */
   --pk-knob-grow: 1.35; /* a switch or slider knob while held */
+  --pk-lift-scale: 1.04; /* (M) a held row lifting before its menu */
+  --pk-recede: 0.971; /* (M) a menu behind its submenu */
 
   /* easings (fixed curves; the springs are --ease-gentle … published by the motion core) */
   --ease-pop: cubic-bezier(0.3, 1.7, 0.45, 1); /* the solid press settle */
@@ -111,6 +113,7 @@
   --dur-glint: 500ms;
   --dur-progress: 600ms;
   --dur-spin: 1s;
+  --dur-rise: 350ms; /* action sheets rising */
   --dur-morph: 420ms; /* (M) a top bar button changing icon: the gel swell and the icons' blur */
 
   /* spring stand-ins until the motion core publishes the real ones (--ease-<name>, --dur-<name>) */
@@ -244,7 +247,7 @@
 /* ===================================================================================================================
    FOUNDATIONS
    =================================================================================================================== */
-:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-seg > button, .pk-stepper > button, .pk-field-clear, button.pk-row, .pk-swipe-actions > button) {
+:where(.pk-btn, .pk-tab, .pk-chip, .pk-menu-item, .pk-action, .pk-alert-btn, .pk-toast-undo, .pk-seg > button, .pk-stepper > button, .pk-field-clear, button.pk-row, .pk-swipe-actions > button) {
   font: inherit;
   color: inherit;
   border: 0;
@@ -1437,4 +1440,482 @@ body > .pk-layer {
   cursor: grab;
   padding: 8px;
   margin: -8px;
+}
+
+/* ===================================================================================================================
+   OVERLAYS · made by Parts.sheet(), .cover(), .popover(), .menu(), .choices(), .confirm() and .toast()
+   =================================================================================================================== */
+
+/* (41, 42) sheet: rises from the bottom, 8 pt from the edges, corners following the screen's (--r-sheet, D17).
+   Drag it down from its header or, when its content is at the top, from the content; a flick faster than 700 pt/s
+   jumps a stop or closes it. With stops (sheet.withStops, D09): 45% and full (90 pt from the top), turning solid at
+   full. Growing to full screen (sheet.growsToFull, D10) covers the screen. Strong glass by default (sheet.glass, D15) */
+.pk-sheet {
+  position: absolute;
+  left: var(--pk-m, 8px);
+  right: var(--pk-m, 8px);
+  bottom: var(--pk-m, 8px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-sheet);
+  overflow: hidden;
+  touch-action: none;
+  translate: 0 var(--pk-y, 100%);
+  scale: var(--pk-shrink, 1);
+  --glass-blur: var(--pk-sheet-blur);
+  transition:
+    translate var(--dur-sheet) var(--ease-sheet),
+    left var(--dur-sheet) var(--ease-sheet),
+    right var(--dur-sheet) var(--ease-sheet),
+    bottom var(--dur-sheet) var(--ease-sheet),
+    scale var(--dur-sheet) var(--ease-sheet);
+}
+.pk-sheet.pk-leaving {
+  transition:
+    translate calc(var(--dur-leave) * var(--pk-speed)) var(--ease-accel),
+    opacity calc(var(--dur-leave) * var(--pk-speed)) var(--ease-accel);
+}
+.pk-sheet.pk-dragging {
+  transition:
+    left calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out),
+    right calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out),
+    bottom calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-sheet-solid {
+  position: absolute;
+  inset: 0;
+  background: var(--surface);
+  opacity: 0;
+  z-index: -1;
+  pointer-events: none;
+  transition: opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-sheet.pk-solid-now .pk-sheet-solid {
+  opacity: 1;
+}
+.pk-sheet-head {
+  position: relative;
+  flex: none;
+  padding: 8px 16px 0;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pk-grabber {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: var(--pk-grab);
+}
+.pk-sheet-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  padding: 0 44px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-sheet-close {
+  position: absolute;
+  right: 12px;
+  top: 14px;
+}
+.pk-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 16px 24px;
+  touch-action: pan-y;
+}
+.pk-sheet-body.pk-at-top {
+  touch-action: none;
+}
+.motion-reduced :is(.pk-sheet, .pk-sheet.pk-leaving) {
+  scale: none;
+  transition:
+    translate 0s,
+    opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-out),
+    left 0s,
+    right 0s,
+    bottom 0s;
+}
+
+/* (43) full-screen cover: covers the whole screen, rising over 500 ms; ✕ closes it (sheet.fullScreen, D10) */
+.pk-cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: var(--r-sheet);
+  overflow: hidden;
+  translate: 0 100%;
+  transition: translate calc(var(--dur-cover) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-cover.pk-on {
+  translate: 0 0;
+}
+.pk-cover.pk-leaving {
+  transition: translate calc(var(--dur-leave) * var(--pk-speed)) var(--ease-accel);
+}
+.pk-cover .pk-bar-slot.pk-right {
+  z-index: 2;
+}
+.pk-cover-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: calc(var(--pk-bar-top) + 58px) 16px 30px;
+}
+.motion-reduced .pk-cover {
+  translate: 0 0;
+  opacity: 0;
+  transition: opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-out);
+}
+.motion-reduced .pk-cover.pk-on {
+  opacity: 1;
+}
+
+/* (44) popover and (16, 46) menus grow out of their button on the menu springs; their blur fades in over 260 ms
+   and stays while they close */
+.pk-morph {
+  position: absolute;
+  transform-origin: var(--pk-ox, 0px) var(--pk-oy, 0px);
+  scale: var(--pk-s0x, 0.2) var(--pk-s0y, 0.2);
+  opacity: 0;
+  -webkit-backdrop-filter: blur(var(--pk-ramp)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--pk-ramp)) saturate(var(--glass-sat));
+  transition:
+    scale var(--dur-menu-open) var(--ease-menu-open),
+    opacity calc(var(--dur-quick) * var(--pk-speed)) var(--ease-linear),
+    --pk-ramp calc(var(--dur-ramp) * var(--pk-speed)) var(--ease-lift);
+}
+.pk-morph.pk-on {
+  scale: 1;
+  opacity: 1;
+  --pk-ramp: var(--pk-blur-to, 22px);
+}
+.pk-morph.pk-leaving {
+  scale: var(--pk-s0x, 0.2) var(--pk-s0y, 0.2);
+  opacity: 0;
+  --pk-ramp: var(--pk-blur-to, 22px);
+  transition:
+    scale var(--dur-menu-close) var(--ease-menu-close),
+    opacity calc(var(--dur-close) * var(--pk-speed)) var(--ease-linear);
+}
+.motion-reduced .pk-morph {
+  scale: none;
+  --pk-ramp: var(--pk-blur-to, 22px);
+  transition: opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-linear);
+}
+/* one menu style everywhere: blur 22 over an 80% fill, corners --r-card (D16) */
+.pk-menu {
+  --pk-blur-to: var(--pk-menu-blur);
+  width: 250px;
+  max-width: calc(100% - 24px);
+  border-radius: var(--r-card);
+  background: var(--pk-menu);
+  box-shadow: inset 0 0 0 0.5px var(--pk-menu-line), var(--shadow-floating);
+  padding: 6px;
+  overflow: hidden;
+  color: var(--fg);
+  z-index: 2;
+}
+.pk-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-medium);
+  font-size: 17px;
+  text-align: left;
+  color: var(--fg);
+  transition:
+    background-color calc(var(--dur-lift-in) * var(--pk-speed)) var(--ease-decel),
+    opacity calc(var(--dur-recede) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-menu-item > span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-menu-item:active,
+.pk-menu-item.pk-hl {
+  background: var(--fill);
+}
+.pk-menu-item.pk-red {
+  color: var(--danger);
+}
+.pk-menu-item:disabled {
+  opacity: 0.4;
+}
+.pk-menu-sep {
+  height: 8px;
+  margin: 0 -6px;
+  background: var(--pk-menu-gap);
+}
+.pk-menu-label {
+  font-size: 13px;
+  color: var(--fg2);
+  padding: 8px 12px 4px;
+}
+.pk-menu.pk-recede {
+  scale: var(--pk-recede);
+  transition: scale calc(var(--dur-recede) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-menu.pk-recede .pk-menu-item {
+  opacity: 0.5;
+}
+/* (45, pinned) a submenu opens over its menu */
+.pk-submenu {
+  position: absolute;
+  -webkit-backdrop-filter: blur(var(--pk-menu-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--pk-menu-blur)) saturate(var(--glass-sat));
+  box-shadow: inset 0 0 0 0.5px var(--pk-menu-line), var(--shadow-floating);
+  scale: 0.92;
+  opacity: 0;
+  transform-origin: 50% 0;
+  z-index: 3;
+  transition:
+    scale calc(var(--dur-recede) * var(--pk-speed)) var(--ease-decel),
+    opacity calc(var(--dur-fade) * var(--pk-speed)) var(--ease-out);
+}
+.pk-submenu.pk-on {
+  scale: 1;
+  opacity: 1;
+}
+.pk-popover {
+  --pk-blur-to: var(--pk-popover-blur);
+  width: 240px;
+  border-radius: var(--r-large);
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 1.35;
+  background: var(--pk-popover);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), inset 0 1px 0.5px rgba(255, 255, 255, 0.2), var(--shadow-floating);
+  color: var(--fg);
+}
+.glass-solid .pk-popover {
+  background: var(--glass-strong);
+}
+/* (46) long-press: a held .pk-hold lifts from 200 ms (×1.04) and opens its menu at 700 ms, over a 20% / 25% dim
+   with no blur; the menu closes in 170 ms */
+.pk-hold {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: scale calc(var(--dur-lift-row) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-hold.pk-lifting {
+  scale: var(--pk-lift-scale);
+  z-index: 3;
+}
+.motion-reduced .pk-hold.pk-lifting {
+  scale: none;
+}
+.pk-lift-clone {
+  position: absolute;
+  margin: 0;
+  border-radius: var(--r-medium);
+  overflow: hidden;
+  scale: var(--pk-lift-scale);
+  box-shadow: var(--shadow-lifted);
+  pointer-events: none;
+  transition: opacity calc(var(--dur-close) * var(--pk-speed)) var(--ease-linear);
+}
+.motion-reduced .pk-lift-clone {
+  scale: none;
+}
+
+/* (47) action sheet: actions from the bottom, Cancel on its own (choices 'actionSheet', D07) */
+.pk-actions {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  translate: 0 110%;
+  transition: translate calc(var(--dur-rise) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-actions.pk-on {
+  translate: 0 0;
+}
+.pk-actions.pk-leaving {
+  translate: 0 110%;
+  transition-timing-function: var(--ease-accel);
+}
+.pk-actions-group {
+  border-radius: var(--r-actions);
+  overflow: hidden;
+}
+.pk-actions-title {
+  text-align: center;
+  font-size: 13px;
+  color: var(--fg2);
+  padding: 14px 16px 10px;
+}
+.pk-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 56px;
+  font-size: 20px;
+  color: var(--accent);
+}
+.pk-action:active {
+  background: var(--fill);
+}
+.pk-action + .pk-action::before,
+.pk-actions-title + .pk-action::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0.5px;
+  background: var(--sep);
+}
+.pk-action.pk-red {
+  color: var(--danger);
+}
+.pk-action.pk-cancel {
+  font-weight: 600;
+}
+
+/* (48) alert: a centred box with two capsule buttons; appears over 250 ms from ×1.1 (confirm 'alert', D08) */
+.pk-alert {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 300px;
+  max-width: calc(100% - 40px);
+  border-radius: var(--r-alert);
+  padding: 22px 18px 18px;
+  text-align: center;
+  translate: -50% -50%;
+  scale: 1.1;
+  opacity: 0;
+  transition:
+    scale calc(var(--dur-appear) * var(--pk-speed)) var(--ease-linear),
+    opacity calc(var(--dur-appear) * var(--pk-speed)) var(--ease-linear);
+}
+.pk-alert.pk-on {
+  scale: 1;
+  opacity: 1;
+}
+.pk-alert.pk-leaving {
+  scale: 1.05;
+  opacity: 0;
+  transition:
+    scale calc(var(--dur-leave) * var(--pk-speed)) var(--ease-linear),
+    opacity calc(var(--dur-leave) * var(--pk-speed)) var(--ease-linear);
+}
+.pk-alert-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.pk-alert-text {
+  font-size: 15px;
+  color: var(--fg2);
+  margin: 0 0 18px;
+  line-height: 1.35;
+}
+.pk-alert-btns {
+  display: flex;
+  gap: 10px;
+}
+.pk-alert-btn {
+  flex: 1;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--fill);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--fg);
+}
+.pk-alert-btn.pk-red {
+  background: var(--danger);
+  color: #fff;
+}
+.pk-alert-btn.pk-blue {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.motion-reduced :is(.pk-alert, .pk-alert.pk-leaving, .pk-actions, .pk-actions.pk-leaving) {
+  scale: none;
+  transition: opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-linear);
+}
+.motion-reduced .pk-actions {
+  translate: 0 0;
+  opacity: 0;
+}
+.motion-reduced .pk-actions.pk-on {
+  opacity: 1;
+}
+
+/* (49) toast: drops in from the top over 500 ms, stays 3 s (timing.toast), leaves upward over 350 ms; Undo where
+   something can be undone */
+.pk-toast {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--pk-bar-top) + 2px);
+  height: 50px;
+  min-width: 220px;
+  max-width: calc(100% - 32px);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 0 18px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--fg);
+  translate: -50% calc(-100% - 60px);
+  transition: translate calc(var(--dur-toast-in) * var(--pk-speed)) var(--ease-decel);
+}
+.pk-toast.pk-on {
+  translate: -50% 0;
+}
+.pk-toast.pk-leaving {
+  translate: -50% calc(-100% - 60px);
+  transition: translate calc(var(--dur-toast-out) * var(--pk-speed)) var(--ease-accel);
+}
+.pk-toast > span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 10px;
+}
+.pk-toast-undo {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.motion-reduced .pk-toast {
+  translate: -50% 0;
+  opacity: 0;
+  transition: opacity calc(var(--dur-reduced) * var(--pk-speed)) var(--ease-linear);
+}
+.motion-reduced .pk-toast.pk-on {
+  opacity: 1;
 }

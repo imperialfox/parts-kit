@@ -32,6 +32,38 @@ Any other part; Vocal Sessions (Q45 pins the release); Android beyond "it still 
 
 **Effort guess:** light to medium.
 
+## Debrief · 4 Nov 2026
+
+**What changed**
+- `parts-kit.js`: while a dock is searching, the kit reads the visible area (`visualViewport` resize and scroll, the window's resize, and every frame for 0.7 s after the field gains or loses focus) and lifts the dock by however much the keyboard would cover it, plus `--pk-kb-gap`. It sets `.pk-kb` and `--pk-kb-lift` on that dock and `--pk-kb` on `<html>`, and sends `pk:keyboard { lift }`. `Parts.keyboard()` reads it again now. Opening the field already focused it with `preventScroll`, so that stayed as it was.
+- `parts-kit.css`: `--pk-kb-gap: 8px` and `--pk-kb: 0px` in the defaults block, and one rule, `.pk-dock.pk-kb { translate: … }`, with no transition. Docks that aren't lifted get no `translate` at all, so nothing else about them changes.
+- README (a Keyboard section, the part 6 row, Layout values, Other calls), CHANGELOG, SHA256SUMS, the gallery's part 6 text, `tools/check.py`.
+
+**How it was checked** (`python tools/check.py`, all passing, one full run before the push)
+- Everything 1.1 checked still passes.
+- New (`keyboard_lift`, with a faked smaller visible area at 402 × 874): opening search with no keyboard moves nothing and focuses the field; a 336 pt keyboard puts the dock's bottom 8 pt above it and `--pk-kb` to the lift, at once, normally, at speed 0 and under Reduce Motion; a panned visible area gives the same place; a 291 pt keyboard moves it with it; the keyboard going brings it back with search still open; `--pk-kb-gap: 20px` gives 20 pt; pinch zoom lifts nothing; after ✕ the dock waits for the keyboard, then comes down; with no keyboard ✕ leaves nothing lifted; part 6's dock in the page stays put when the keyboard is below it and rides 8 pt above it when it would be covered; opening the field doesn't scroll the page; only the searching dock lifts.
+- The new checks were tried against a broken lift and caught it.
+
+**Decided along the way** (inside the scope; each is easy to change)
+1. **The lift is measured from where the dock is,** not from a fixed keyboard height: the dock moves up by however much the keyboard (plus 8 pt) would cover it. A dock at the bottom of the screen gets the full lift; one higher up gets less or none.
+2. **After ✕ the dock waits for the keyboard,** so the tab bar doesn't drop behind a keyboard that's still on its way down.
+3. **A short every-frame read** after focus changes, as well as the visualViewport events, in case iOS reports the visible area in steps.
+4. **`pk:keyboard` and `Parts.keyboard()`** were added so an app and its tests can follow the lift without polling the CSS value.
+
+- The Parts gallery (artifact `174c215e-…`) republished on 1.2 as version `1793821254-9044`; its page id is unchanged, so notes keep their place.
+- **Build receipt:** Parts kit 1.2 · L–M → L–M · 35 steps · 29k written · 7.3M re-read · 1 full test run (also in `BUILD_RECEIPTS.md`).
+
+**What's left**
+- Q45 · Interface: Kit Top Bar and Search can now pin 1.2.0 (after Q44).
+- **One thing for Ivan:** on GitHub, open the repo › Releases › *Draft a new release*, type the tag `v1.2.0` (target `main`), title "Parts kit 1.2.0", paste the 1.2.0 part of `CHANGELOG.md`, attach `parts-kit.css`, `parts-kit.js` and `SHA256SUMS.txt`, and publish. This session couldn't make tags or releases.
+
+**For Ivan, on your phone** (the Parts gallery)
+1. Tap the search circle in the gallery's own bar at the bottom: does the field sit just above the keyboard?
+2. Type: can you see what you type?
+3. Scroll or tap elsewhere to close the keyboard: does the field come down with it, with no jump?
+4. Open search again and tap ✕: does the bar come back down with the keyboard, not before it?
+5. Scroll to part 6 and do the same: does its field stay in view?
+
 ---
 
 # Handoff · Parts kit 1.1 · 4 Nov 2026

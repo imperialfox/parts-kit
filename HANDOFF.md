@@ -1,3 +1,74 @@
+# Handoff · Parts kit 1.1 · 4 Nov 2026
+
+> **Render:** Approved by Ivan on 4 Nov 2026, 09:57 ("render - parts kit 1.1"), for the plan as written, with every *Default if unanswered* taken (decision 1 A, 2 A, 3 the default).
+> **Build:** Ivan, 4 Nov 2026, 10:07 ("Parts Kit 1.1 Build"), in a fresh chat. Built by Claude; released as **1.1.0** on 4 Nov 2026. Debrief at the end.
+> **The rule for every kit version:** Render approves a named scope only; nothing is built, committed or released until Ivan separately says Build.
+
+**For:** Claude · **Job:** build · **Builder:** Claude
+**Repo:** `imperialfox/parts-kit`, from 1.0.0 (`0aeca44`). No Q number: it belongs to no app.
+**Plan (long notes):** the Singing project's `claude/parts_kit_1_1_blueprint.md`. Decision: D18 in `claude/parts_decisions_2026-11-02.md`.
+**Needed by:** Vocal Sessions Q41 · Interface: Parts Kit Move, which pins 1.1.0.
+
+**Goal:** the kit stays the one source of motion for every app, and an app can still differ for the whole app or one element, with every difference listed on each build.
+
+## Agreed (defaults taken)
+
+1. **Spring overrides:** a `springs: { name: { z, f } }` setting changes one named spring for that app, in the CSS and the code. Unknown names and bad numbers are refused.
+2. **One element:** an element can carry its own named timing or spring in its `style` (for example `--dur-rise: 600ms`). The kit reads timings from the element first, then its parent, then the page (decision 1, A).
+3. **`Parts.differences()`** lists every spring, timing and setting where the app differs from the kit, app-wide and for elements on the current screen. Each app checks it in its own test against a list with a D-number per line (decision 2, A).
+4. **Reduce Motion and motion off still win** over any override.
+5. **`motion: 'app'` stays,** and the README says it needs `window.MOTION`.
+6. **The Vocal Sessions sample** says `motion: 'kit', // D18` with an empty `springs: {}` line.
+7. **Version 1.1.0:** changelog, README (Settings, Motion), this handoff with the Build stamp and Debrief. Ivan makes the `v1.1.0` tag and release page if the session can't.
+8. **When:** a fresh chat, before Q41's Build; it doesn't wait for Q38 or Q39 (decision 3).
+
+## Out of scope
+
+Any app change; new or "Later" parts; per-screen motion settings; the prototype kit, Atlas kit and `SHARED.md`.
+
+## Done when
+
+- 1.1.0 has spring overrides, per-element timings and `Parts.differences()`, with README, changelog and `HANDOFF.md` updated.
+- `tools/check.py` passes: an override changes only its spring; an element's timing changes only that element; `differences()` lists exactly what changed; overrides do nothing under Reduce Motion and speed 0; bad overrides are refused; everything 1.0 checked still passes.
+- The Vocal Sessions sample loads cleanly with `motion: 'kit'` and an empty `springs` line.
+- The Parts gallery is republished on 1.1 with one demo element showing an override.
+
+**Effort:** light to medium.
+
+## Debrief · 4 Nov 2026
+
+**What changed**
+- `parts-kit.js`: the `springs` setting (checked line by line, `null` puts a spring back); timings read from the element first (`tok`, `dur`, `ease` take the element, and every place the kit times a part now passes it); `--spring-<name>: <spring>` on an element, filled in as that element's `--ease-` and `--dur-` so the CSS follows it at every speed; a `style` option on every overlay call; `Parts.differences()`; `Parts.motion.springs()`, and `Parts.motion.spring()` and `ease()` taking an element.
+- `parts-kit.css`: only the version line. No part's CSS needed changing, because the CSS already reads timings from the element.
+- `samples/vocal-sessions.settings.js`: `motion: 'kit', // D18` and an empty `springs: {}` line.
+- `demo/index.html`: action sheet (47) has "Show slow actions" with its own 900 ms timing and an "Own timing" switch to turn it off.
+- README (Settings, Motion, a new "Differences from the kit" section with an app test example), CHANGELOG, SHA256SUMS, `tools/check.py`.
+
+**How it was checked** (`python tools/check.py`, all passing, one full run before the push)
+- Everything 1.0 checked: the value rule, the 64 screenshots (looked at the new 47 demo at 402 × 874), every behaviour and every setting both ways.
+- New: a spring override changes only that spring, in the CSS and the code, and `null` gives it back; eight kinds of bad override refused, each leaving the springs as they were; an element's own timing reaches it and what's inside it but not its neighbour; an element's own spring reaches its CSS and the code, and taking it away gives the kit's back; `Parts.differences()` exact for one element, for an app-wide mix (two settings, a spring, two stylesheet timings, one element) and empty again afterwards; at speed 0 and under Reduce Motion an overridden spring and an element's spring run for 0 ms; the demo's own differences are exactly its six setting lines; the slow action sheet rises over 0.9 s while the plain one keeps 0.35 s, the code waits for its own timing before removing it, the switch puts it back, and under Reduce Motion it only fades.
+- Speed: a sheet or a menu opens in at most about 11 ms with timings read from each element; `Parts.differences()` on the whole gallery takes about 85 ms (it's for tests, not every frame).
+
+**Decided along the way** (inside the scope; each is easy to change)
+1. **A `style` option on the overlay calls.** Sheets, menus and the rest are made by the kit, so "only the New song sheet rises slower" needs a way in: `Parts.sheet({ style: '--dur-rise: 600ms' })`. Targeting the overlay's `data-name` in the stylesheet works too.
+2. **An element's spring is named, not numbered:** `--spring-sheet: gentle` picks another of the kit's springs (including one the app overrides). New spring numbers go in `springs: {}` for the whole app. This keeps every spring in one list.
+3. **In a stylesheet** an element's spring is written as two lines (`--ease-sheet: var(--ease-gentle); --dur-sheet: var(--dur-gentle)`); the `--spring-` shorthand is for the `style` attribute, where the kit can see it.
+4. **The spring limits:** `z` from 0.05 to 1 and `f` from 0.1 to 20 Hz. Outside that a spring either never settles or snaps, so it's refused.
+5. **For an element, `differences()` compares with the value around it** (its parent), so an element inside an app-wide difference only lists what it changes itself.
+6. **With `motion: 'app'`**, the app's MOTION still decides the springs it has; a `springs` line for one of those shows in `differences()` but the app's numbers win. Ivan's apps use `motion: 'kit'`.
+
+**What's left**
+- Q41 · Interface: Parts Kit Move can now pin 1.1.0 (after Q38 and Q39).
+- The prototype kit, the Atlas kit and `SHARED.md` are still on Ivan's to-do list.
+- **One thing for Ivan:** on GitHub, open the repo › Releases › *Draft a new release*, type the tag `v1.1.0` (target `main`), title "Parts kit 1.1.0", paste the 1.1.0 part of `CHANGELOG.md`, attach `parts-kit.css`, `parts-kit.js` and `SHA256SUMS.txt`, and publish. (`v1.0.0` too, if it isn't made yet.)
+
+**For Ivan, on your phone** (the Parts gallery › 47 Action sheet)
+1. Tap Show actions, then Show slow actions: does 900 ms feel clearly slower, and still smooth?
+2. Turn Own timing off and tap Show slow actions again: back to the normal speed?
+3. Turn on Reduce Motion on the iPhone and open the slow one: only a fade?
+
+---
+
 # Handoff · Parts kit 1.0 · 3 Nov 2026
 
 > **Render:** Approved by Ivan on 3 Nov 2026, 22:14 ("render parts kit 1.0"), for the scope below. Decisions 1–4 as he answered them (21:17); decisions 5, 6 and 7 on their *Default if unanswered* (5: Q34's numbers became the kit's defaults; 6 is on his to-do list in Vocal Sessions' `RENDER_QUEUE.md`).

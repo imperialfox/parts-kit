@@ -166,7 +166,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
 
 </style>
 <style id="pk-css">
-/* Parts kit 1.0.0 · one set of Liquid Glass parts for any app or prototype.
+/* Parts kit 1.1.0 · one set of Liquid Glass parts for any app or prototype.
    MIT licence. Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
    Load this file first, then your app's own stylesheet: any value below that your app also sets is yours.
    Every corner, press, curve and duration the parts use is named in the defaults block; nothing below it writes its
@@ -3656,18 +3656,20 @@ body > .pk-layer {
 
 </script>
 <script id="pk-js">
-/* Parts kit 1.0.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
+/* Parts kit 1.1.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
    Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
 
    Use: load parts-kit.css and this file, then your settings file:  Parts.settings({ app: 'My app', … })
    Parts are plain HTML with pk- classes, so screens drawn as HTML text work: the kit listens on the document and finds
    the part under the finger. Overlays (sheets, menus, alerts, toasts) are made by calls: Parts.sheet({…}), Parts.menu(…).
    Every part sends pk: events (pk:change, pk:hold, pk:reorder, pk:close …) that bubble, so the app can listen once.
+   An app can differ from the kit for the whole app (a timing in its stylesheet, a spring in springs: {…}) or for one
+   element (a timing or --spring-… in its style); Parts.differences() lists every difference.
    README.md lists every part, setting and call. */
 (function () {
   'use strict';
   if (window.Parts && window.Parts.version) return;
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const doc = document;
   const html = doc.documentElement;
 
@@ -3701,10 +3703,11 @@ body > .pk-layer {
   /* ============================================================================================================
      SETTINGS · one line per decision in the app's settings file. Unknown settings are refused.
      ============================================================================================================ */
-  const BOOL = 'boolean', NUM = 'number', STR = 'string', LIST = 'list', ANY = 'any';
+  const BOOL = 'boolean', NUM = 'number', STR = 'string', LIST = 'list', ANY = 'any', SPRINGMAP = 'springs';
   const SCHEMA = {
     app: STR,
     motion: ['kit', 'app'],
+    springs: SPRINGMAP,
     root: ANY,
     tabBar: { fold: BOOL, searchGap: NUM },
     segmented: { style: ['gallery', 'squish'] },
@@ -3721,6 +3724,7 @@ body > .pk-layer {
   const DEFAULTS = {
     app: '',
     motion: 'kit',
+    springs: {},
     root: null,
     tabBar: { fold: false, searchGap: 8 },
     segmented: { style: 'gallery' },
@@ -3754,6 +3758,7 @@ body > .pk-layer {
       };
       if (want === undefined) return no('Unknown setting: ' + p);
       if (want === ANY) return;
+      if (want === SPRINGMAP) return springLines(v, p, no, out, bad);
       if (Array.isArray(want)) {
         if (!want.includes(v)) no(p + " should be one of '" + want.join("', '") + "'");
       } else if (want === LIST) {
@@ -3762,12 +3767,39 @@ body > .pk-layer {
       else if (typeof v !== want) no(p + ' should be a ' + want);
     });
   }
+  // springs: { press: { z: 0.8, f: 3.6 } } changes one of the kit's named springs for this app; null puts it back
+  const SPRING_Z = [0.05, 1], SPRING_F = [0.1, 20];
+  function springLines(v, p, no, out, bad) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return no(p + ' should be an object of springs, like { press: { z: 0.8, f: 3.6 } }');
+    Object.keys(v).forEach((name) => {
+      const q = p + '.' + name, x = v[name];
+      const bad1 = (m) => {
+        out.push(m);
+        bad.add(q);
+      };
+      if (!SPRINGS[name]) return bad1('Unknown spring: ' + q + " (the kit's springs: " + Object.keys(SPRINGS).join(', ') + ')');
+      if (x === null) return;
+      if (!x || typeof x !== 'object' || Array.isArray(x) || Object.keys(x).some((k) => k !== 'z' && k !== 'f'))
+        return bad1(q + ' should be { z, f } (or null for the kit\'s own)');
+      const inRange = (n, r) => typeof n === 'number' && isFinite(n) && n >= r[0] && n <= r[1];
+      if (!inRange(x.z, SPRING_Z) || !inRange(x.f, SPRING_F))
+        bad1(q + ' should have z from ' + SPRING_Z.join(' to ') + ' and f from ' + SPRING_F.join(' to ') + ' Hz');
+    });
+  }
   // keeps every good line; a bad one leaves the setting as it was
   function merge(into, from, schema, path, bad) {
     Object.keys(from).forEach((k) => {
       const p = path ? path + '.' + k : k;
       const want = schema[k];
       if (want === undefined || bad.has(p)) return;
+      if (want === SPRINGMAP) {
+        Object.keys(from[k]).forEach((name) => {
+          if (bad.has(p + '.' + name)) return;
+          if (from[k][name] === null) delete into[k][name];
+          else into[k][name] = { z: from[k][name].z, f: from[k][name].f };
+        });
+        return;
+      }
       if (want && typeof want === 'object' && !Array.isArray(want)) merge(into[k], from[k], want, p, bad);
       else into[k] = k === 'root' || want === ANY ? from[k] : clone(from[k]);
     });
@@ -3794,14 +3826,17 @@ body > .pk-layer {
     html.classList.toggle('pk-seg-squish', S.segmented.style === 'squish');
     html.style.setProperty('--pk-search-gap', (+S.tabBar.searchGap || 0) + 'px');
     if (!S.tabBar.fold) doc.querySelectorAll('.pk-dock.pk-folded').forEach((d) => d.classList.remove('pk-folded'));
+    motion.use(S.springs);
     motion.publish();
+    localizeAll();
   }
 
   /* ============================================================================================================
      MOTION · the spring core. Springs are a damping ratio ζ and a frequency in Hz, sampled into CSS linear() and
      published as --ease-<name> / --dur-<name>. Speed: 1 normal, 4 slow, 0 off. Reduce Motion puts .motion-reduced
      on <html>. motion: 'app' uses the app's own MOTION instead (its springs, speed and Reduce Motion), and the
-     kit only adds the springs the app doesn't have.
+     kit only adds the springs the app doesn't have (it needs the app's motion object on window, as window.MOTION).
+     springs: {…} in the settings changes a named spring for the whole app: in the CSS and in the code alike.
      ============================================================================================================ */
   const fromKC = (k, c) => ({ z: Math.min(1, +(c / (2 * Math.sqrt(k))).toFixed(3)), f: +(Math.sqrt(k) / (2 * Math.PI)).toFixed(3) });
   const SPRINGS = {
@@ -3844,8 +3879,18 @@ body > .pk-layer {
     p[n] = 1;
     return { ease: linearOK ? 'linear(' + p.join(', ') + ')' : 'cubic-bezier(.25,.9,.3,1)', ms: Math.round(T * 1000) };
   }
+  // the springs in use: the kit's, with the app's springs: {…} lines on top
+  const E = {};
   const C = {};
-  Object.keys(SPRINGS).forEach((k) => (C[k] = curve(SPRINGS[k].z, SPRINGS[k].f)));
+  function use(over) {
+    Object.keys(SPRINGS).forEach((k) => {
+      const s = (over && over[k]) || SPRINGS[k];
+      if (C[k] && E[k] && E[k].z === s.z && E[k].f === s.f) return;
+      E[k] = { z: s.z, f: s.f };
+      C[k] = curve(s.z, s.f);
+    });
+  }
+  use(null);
 
   const motion = (() => {
     let speed = 1;
@@ -3888,19 +3933,35 @@ body > .pk-layer {
       if (mq.addEventListener) mq.addEventListener('change', () => publish());
       else if (mq.addListener) mq.addListener(() => publish());
     }
-    // the springs the kit and the app both have must be the same (the kit's check uses this)
+    // the springs the kit and the app both have must be the same (the kit's check uses this); the kit's side
+    // includes the app's springs: {…} lines
     function compare(other) {
       const o = other || (window.MOTION && window.MOTION.SPRINGS) || {};
       const diff = [];
       Object.keys(o).forEach((k) => {
-        if (!SPRINGS[k]) return;
-        const a = SPRINGS[k], b = o[k];
+        if (!E[k]) return;
+        const a = E[k], b = o[k];
         if (Math.abs(a.z - b.z) > 1e-6 || Math.abs(a.f - b.f) > 1e-6) diff.push(k);
       });
       return diff;
     }
+    // which spring an element uses for a named one: its own --spring-<name> (in its style or a parent's), or the
+    // spring whose curve its --ease-<name> carries (the stylesheet form), else the same name
+    function springOf(k, el) {
+      if (!el || !el.isConnected || !C[k]) return k;
+      const cs = getComputedStyle(el);
+      const n = cs.getPropertyValue('--spring-' + k).trim();
+      if (n && C[n]) return n;
+      const e = cs.getPropertyValue('--ease-' + k).trim();
+      const h = getComputedStyle(html);
+      if (!e || e === h.getPropertyValue('--ease-' + k).trim()) return k;
+      return Object.keys(C).find((x) => h.getPropertyValue('--ease-' + x).trim() === e) || k;
+    }
     return {
       SPRINGS,
+      springs: () => clone(E),
+      use,
+      springOf,
       curve,
       publish,
       compare,
@@ -3915,9 +3976,15 @@ body > .pk-layer {
         forced = v == null ? null : !!v;
         publish();
       },
-      // how long a spring runs now, in ms (0 when motion is off or reduced)
-      spring: (k) => (on() && C[k] ? Math.round(C[k].ms * sp()) : 0),
-      ease: (k) => (C[k] ? C[k].ease : 'ease'),
+      // how long a spring runs now, in ms (0 when motion is off or reduced); give the element to follow its own spring
+      spring: (k, el) => {
+        const n = springOf(k, el);
+        return on() && C[n] ? Math.round(C[n].ms * sp()) : 0;
+      },
+      ease: (k, el) => {
+        const n = springOf(k, el);
+        return C[n] ? C[n].ease : 'ease';
+      },
     };
   })();
 
@@ -3942,16 +4009,17 @@ body > .pk-layer {
   }
   const screenW = () => (rootEl() === doc.body ? window.innerWidth : rootEl().offsetWidth);
   const screenH = () => (rootEl() === doc.body ? window.innerHeight : rootEl().offsetHeight);
-  // a named value from the stylesheet, as read where the parts live
-  const tok = (name) => getComputedStyle(rootEl()).getPropertyValue(name).trim();
-  const tokMs = (name) => {
-    const v = tok(name);
+  // a named value from the stylesheet, read from the element first, then its parents, then the page (the same
+  // order the CSS follows); with no element, or one not on the page yet, it's read where the parts live
+  const tok = (name, el) => getComputedStyle(el && el.isConnected ? el : rootEl()).getPropertyValue(name).trim();
+  const tokMs = (name, el) => {
+    const v = tok(name, el);
     const m = /^(-?[\d.]+)(ms|s)$/.exec(v);
     return m ? +m[1] * (m[2] === 's' ? 1000 : 1) : 0;
   };
   // a fixed timing (--dur-…) at the current speed; under Reduce Motion pass fade=true for the short fade instead
-  const dur = (name) => Math.round(tokMs(name) * motion.speed());
-  const ease = (name) => tok(name) || 'ease';
+  const dur = (name, el) => Math.round(tokMs(name, el) * motion.speed());
+  const ease = (name, el) => tok(name, el) || 'ease';
   // timers for gestures and how long things stay (a hold, a toast) run at real time when motion is off
   const later = (fn, ms) => setTimeout(fn, ms * Math.max(1, motion.speed()));
   const after = (fn, ms) => setTimeout(fn, ms + 30); // cleanup once an animation has had its time
@@ -3962,6 +4030,163 @@ body > .pk-layer {
   }
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const nm = (o, plain) => esc((o && o.name) || plain);
+  // an overlay the kit makes: its name, and any style the app gives it (o.style, e.g. '--dur-rise: 600ms')
+  function named(el, o, plain) {
+    el.dataset.name = nm(o, plain);
+    if (o && typeof o.style === 'string' && o.style) {
+      el.style.cssText += ';' + o.style;
+      localize(el);
+    }
+  }
+
+  /* ============================================================================================================
+     ONE ELEMENT · an element can carry its own timing in its style (--dur-rise: 600ms), which the CSS and the code
+     both follow, or its own spring for a named one (--spring-sheet: gentle). For a spring the kit fills in that
+     element's --ease-sheet and --dur-sheet from the chosen spring, so the CSS follows it at every speed.
+     ============================================================================================================ */
+  function localize(el) {
+    const st = el.style, want = {};
+    for (let i = 0; i < st.length; i++) if (st[i].startsWith('--spring-')) want[st[i].slice(9)] = st.getPropertyValue(st[i]).trim();
+    const had = el._pkSprings || {};
+    Object.keys(had).forEach((k) => {
+      if (want[k]) return;
+      st.removeProperty('--ease-' + k);
+      st.removeProperty('--dur-' + k);
+    });
+    const now = {};
+    Object.keys(want).forEach((k) => {
+      const n = want[k];
+      if (!C[k] || !C[n]) {
+        const m = 'Unknown spring in a style: --spring-' + k + ': ' + n + (el.dataset.name ? ' (' + el.dataset.name + ')' : '');
+        if (!problems.includes(m)) {
+          problems.push(m);
+          if (window.console) console.error('Parts kit: ' + m);
+        }
+        return;
+      }
+      now[k] = n;
+      const e = 'var(--ease-' + n + ')', d = 'var(--dur-' + n + ')';
+      if (st.getPropertyValue('--ease-' + k) !== e) st.setProperty('--ease-' + k, e);
+      if (st.getPropertyValue('--dur-' + k) !== d) st.setProperty('--dur-' + k, d);
+    });
+    if (Object.keys(now).length || el._pkSprings) el._pkSprings = now;
+  }
+  const localizeAll = () => $$('[style*="--spring-"]').forEach(localize);
+  if (window.MutationObserver) {
+    new MutationObserver((list) => {
+      list.forEach((r) => {
+        if (r.type === 'attributes') {
+          const t = r.target;
+          if (t._pkSprings || (t.getAttribute('style') || '').includes('--spring-')) localize(t);
+        } else
+          r.addedNodes.forEach((n) => {
+            if (n.nodeType !== 1) return;
+            if ((n.getAttribute('style') || '').includes('--spring-')) localize(n);
+            $$('[style*="--spring-"]', n).forEach(localize);
+          });
+      });
+    }).observe(html, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+  }
+
+  /* ============================================================================================================
+     DIFFERENCES · Parts.differences() lists every spring, timing and setting where the app differs from the kit:
+     the whole app (settings, springs: {…}, timings in its stylesheet) and single elements on the current screen.
+     Each line has a key (e.g. 'spring press', 'timing --dur-close', 'element New song › --dur-rise'), so an app's
+     own test can keep a list with a decision ID per line and fail on any difference that isn't on it.
+     ============================================================================================================ */
+  // the kit's own timings, read from its defaults block (the rule that sets --pk-speed)
+  let kitTimes = null;
+  function kitTimings() {
+    if (kitTimes) return kitTimes;
+    const out = {};
+    const walk = (rules) => {
+      for (const r of rules) {
+        if (r.cssRules && !r.selectorText) walk(r.cssRules);
+        else if (r.selectorText === ':where(:root)' && r.style.getPropertyValue('--pk-speed'))
+          for (let i = 0; i < r.style.length; i++) {
+            const n = r.style[i];
+            if (/^--(dur|ease)-/.test(n) && !C[n.replace(/^--(dur|ease)-/, '')]) out[n] = r.style.getPropertyValue(n).trim();
+          }
+      }
+    };
+    for (const sh of Array.from(doc.styleSheets)) {
+      try {
+        walk(sh.cssRules);
+      } catch (e) {
+        /* another site's stylesheet: not the kit's */
+      }
+    }
+    if (Object.keys(out).length) kitTimes = out;
+    return out;
+  }
+  const sameTime = (a, b) => {
+    const ms = (v) => {
+      const m = /^(-?[\d.]+)(ms|s)$/.exec(v);
+      return m ? +m[1] * (m[2] === 's' ? 1000 : 1) : null;
+    };
+    const x = ms(a), y = ms(b);
+    if (x != null && y != null) return Math.abs(x - y) < 0.01;
+    return a.replace(/\s+/g, '') === b.replace(/\s+/g, '');
+  };
+  const label = (el) =>
+    el.dataset.name || (el.id ? '#' + el.id : el.tagName.toLowerCase() + (el.classList.length ? '.' + Array.from(el.classList).join('.') : ''));
+  const show = (v) => (typeof v === 'string' ? v : JSON.stringify(v));
+  function differences(o) {
+    o = o || {};
+    const out = [];
+    const add = (kind, name, app, kit, el) => {
+      const key = (kind === 'element' ? 'element ' + label(el) + ' › ' : kind + ' ') + name;
+      const d = { key, kind, name, app, kit, text: key + ': ' + show(app) + (kind === 'element' ? ' (around it: ' : ' (kit: ') + show(kit) + ')' };
+      if (el) d.el = el;
+      out.push(d);
+    };
+    // settings
+    const walk = (schema, cur, def, path) =>
+      Object.keys(schema).forEach((k) => {
+        const p = path ? path + '.' + k : k;
+        if (!path && (k === 'app' || k === 'root' || k === 'own' || k === 'springs')) return;
+        const want = schema[k];
+        if (want && typeof want === 'object' && !Array.isArray(want)) return walk(want, cur[k], def[k], p);
+        if (JSON.stringify(cur[k]) !== JSON.stringify(def[k])) add('setting', p, clone(cur[k]), clone(def[k]));
+      });
+    walk(SCHEMA, S, DEFAULTS, '');
+    // springs for the whole app
+    Object.keys(S.springs).forEach((k) => add('spring', k, clone(S.springs[k]), clone(SPRINGS[k])));
+    // timings for the whole app (the app's stylesheet)
+    const kit = kitTimings();
+    const hs = getComputedStyle(html);
+    Object.keys(kit).forEach((n) => {
+      const v = hs.getPropertyValue(n).trim();
+      if (v && !sameTime(v, kit[n])) add('timing', n, v, kit[n]);
+    });
+    // single elements on the current screen: a timing or spring that differs from its parent's
+    localizeAll();
+    const R = o.root ? (typeof o.root === 'string' ? doc.querySelector(o.root) : o.root) : rootEl();
+    if (R) {
+      const names = Object.keys(kit);
+      const springs = Object.keys(C);
+      const cs = new Map();
+      const style = (el) => {
+        if (!cs.has(el)) cs.set(el, getComputedStyle(el));
+        return cs.get(el);
+      };
+      const els = [R].concat($$('*', R)).filter((el) => el !== html && el.parentElement);
+      els.forEach((el) => {
+        const a = style(el), b = style(el.parentElement);
+        names.forEach((n) => {
+          const x = a.getPropertyValue(n).trim(), y = b.getPropertyValue(n).trim();
+          if (x !== y && !sameTime(x, y)) add('element', n, x, y, el);
+        });
+        springs.forEach((k) => {
+          const x = a.getPropertyValue('--ease-' + k).trim(), y = b.getPropertyValue('--ease-' + k).trim();
+          if (x === y && a.getPropertyValue('--spring-' + k) === b.getPropertyValue('--spring-' + k)) return;
+          const mine = motion.springOf(k, el), theirs = motion.springOf(k, el.parentElement);
+          if (mine !== theirs) add('element', 'spring ' + k, mine, theirs, el);
+        });
+      });
+    }
+    return out;
+  }
   // gesture priority: whatever the finger lands on gets first claim
   const OWN = '[data-own-gesture],input,textarea,select,.pk-switch,.pk-slider,.pk-seg,.pk-tabbar,.pk-swipe-front,.pk-grip,.pk-search,.pk-search-field';
   const ownedBy = (target, part) => {
@@ -4008,7 +4233,7 @@ body > .pk-layer {
     if (!d) return;
     if (ms != null) d.style.transitionDuration = ms + 'ms';
     d.classList.remove('pk-on');
-    after(() => d.remove(), ms != null ? ms : dur('--dur-fade'));
+    after(() => d.remove(), ms != null ? ms : dur('--dur-fade', d));
   }
   // overlays that are open, newest last; Escape closes the newest
   const open = [];
@@ -4162,7 +4387,7 @@ body > .pk-layer {
         k.classList.remove('pk-squish');
         void k.offsetWidth;
         k.classList.add('pk-squish');
-        after(() => k.classList.remove('pk-squish'), dur('--dur-squish'));
+        after(() => k.classList.remove('pk-squish'), dur('--dur-squish', k));
       }
     }
     if (!quiet && was !== i) emit(bar, 'change', { index: i, value: its[i].dataset.value || its[i].textContent.trim() });
@@ -4330,7 +4555,7 @@ body > .pk-layer {
       if (page.classList.contains('pk-on')) return;
       page.classList.remove('pk-shown');
       if (u) u.classList.remove('pk-pushed-back');
-    }, motion.spring('nav'));
+    }, motion.spring('nav', page));
     emit(page, 'pop');
   }
   let backDrag = null;
@@ -4392,18 +4617,18 @@ body > .pk-layer {
       nu.className = 'pk-ico';
       nu.innerHTML = iconHTML;
       btn.append(nu);
-      const T = dur('--dur-morph');
+      const T = dur('--dur-morph', btn);
       if (!old) return;
       if (!motion.on() || !T) {
         if (motion.reduced() && T) {
-          old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur('--dur-reduced'), fill: 'forwards' }).onfinish = () => old.remove();
-          nu.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-reduced') });
+          old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur('--dur-reduced', btn), fill: 'forwards' }).onfinish = () => old.remove();
+          nu.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-reduced', btn) });
         } else old.remove();
         return;
       }
       old.animate([{ opacity: 1, filter: 'blur(0px)' }, { opacity: 0, filter: 'blur(6px)' }], { duration: T * 0.42, easing: 'linear', fill: 'forwards' }).onfinish = () => old.remove();
-      nu.animate([{ opacity: 0, filter: 'blur(3.5px)' }, { opacity: 0, filter: 'blur(3.5px)', offset: 0.25 }, { opacity: 1, filter: 'blur(0px)' }], { duration: T * 0.84, easing: ease('--ease-out') });
-      btn.animate([{ scale: '1' }, { scale: '1.22', offset: 0.6 }, { scale: '0.98', offset: 0.85 }, { scale: '1' }], { duration: T, easing: ease('--ease-out'), composite: 'add' });
+      nu.animate([{ opacity: 0, filter: 'blur(3.5px)' }, { opacity: 0, filter: 'blur(3.5px)', offset: 0.25 }, { opacity: 1, filter: 'blur(0px)' }], { duration: T * 0.84, easing: ease('--ease-out', btn) });
+      btn.animate([{ scale: '1' }, { scale: '1.22', offset: 0.6 }, { scale: '0.98', offset: 0.85 }, { scale: '1' }], { duration: T, easing: ease('--ease-out', btn), composite: 'add' });
     },
     appear(slot, buttonHTML) {
       slot.insertAdjacentHTML('beforeend', buttonHTML);
@@ -4419,23 +4644,23 @@ body > .pk-layer {
   // the materialize choreography (M): in over 250 ms (glass full at 92%, content sharpening from an 8 px blur over
   // the last 65%, scale from 1.15, or 1.1 inside a bar); out over 350 ms (content gone by 55%, then the empty glass)
   function appearAs(el, from, force) {
-    const T = dur('--dur-appear');
+    const T = dur('--dur-appear', el);
     if (!force && !motion.on()) return Promise.resolve();
     if (!T) return Promise.resolve();
-    if (motion.reduced()) return el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-reduced') }).finished.catch(() => {});
+    if (motion.reduced()) return el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-reduced', el) }).finished.catch(() => {});
     const inner = el.querySelector('svg, .pk-ico, span');
     if (inner) inner.animate([{ opacity: 0, filter: 'blur(8px)' }, { opacity: 0, filter: 'blur(8px)', offset: 0.35 }, { opacity: 1, filter: 'blur(0px)' }], { duration: T, easing: 'linear' });
     return el.animate([{ scale: String(from), opacity: 0 }, { scale: '1', opacity: 1, offset: 0.92 }, { scale: '1', opacity: 1 }], { duration: T, easing: 'linear' }).finished.catch(() => {});
   }
   function leaveAs(el) {
-    const T = dur('--dur-leave');
+    const T = dur('--dur-leave', el);
     const done = () => el.remove();
     if (!T) {
       done();
       return Promise.resolve();
     }
     if (motion.reduced()) {
-      const a = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur('--dur-reduced'), fill: 'forwards' });
+      const a = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur('--dur-reduced', el), fill: 'forwards' });
       return a.finished.then(done, done);
     }
     const inner = el.querySelector('svg, .pk-ico, span');
@@ -4465,7 +4690,7 @@ body > .pk-layer {
     if (!b.dataset.pkLabel) b.dataset.pkLabel = b.textContent.trim();
     b.textContent = on ? b.dataset.done || 'Done' : b.dataset.pkLabel;
     b.style.fontWeight = on ? '600' : '';
-    if (motion.on()) b.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-fade') });
+    if (motion.on()) b.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur('--dur-fade', b) });
     emit(list, 'edit', { on });
   });
 
@@ -4496,7 +4721,7 @@ body > .pk-layer {
       sw.classList.remove('pk-swell');
       void sw.offsetWidth;
       sw.classList.add('pk-swell');
-      after(() => sw.classList.remove('pk-swell'), dur('--dur-switch'));
+      after(() => sw.classList.remove('pk-swell'), dur('--dur-switch', sw));
     }
     if (!quiet && was !== on) emit(sw, 'change', { on });
   }
@@ -4746,7 +4971,7 @@ body > .pk-layer {
     const row = front.parentElement;
     later(() => {
       if (swOpen !== front && !front.classList.contains('pk-dragging')) row.classList.remove('pk-show');
-    }, motion.spring('gentle') || 1);
+    }, motion.spring('gentle', front) || 1);
     if (swOpen === front) swOpen = null;
   }
   doc.addEventListener('pointerdown', (ev) => {
@@ -4874,7 +5099,7 @@ body > .pk-layer {
     if (x && x.nodeType === 1) el.append(x);
   };
 
-  /* (41, 42) Parts.sheet({ title, html | node, key, name, closeName, onClose }) → { el, body, close(), grow(),
+  /* (41, 42) Parts.sheet({ title, html | node, key, name, style, closeName, onClose }) → { el, body, close(), grow(),
      to(stop) }. key is the sheet's name in the settings: sheet.withStops gives it the 45% and full stops,
      sheet.growsToFull lets grow() raise it to full screen, sheet.fullScreen opens it as a cover instead. */
   function sheet(o) {
@@ -4885,7 +5110,7 @@ body > .pk-layer {
     const canGrow = allowed(S.sheet.growsToFull, o.key);
     const el = doc.createElement('div');
     el.className = 'pk-sheet pk-glass' + (S.sheet.glass === 'strong' ? ' pk-strong' : '');
-    el.dataset.name = nm(o, 'Sheet');
+    named(el, o, 'Sheet');
     el.setAttribute('role', 'dialog');
     el.innerHTML =
       '<i class="pk-sheet-solid"></i><div class="pk-sheet-head"><i class="pk-grabber" data-name="Grabber"></i><div class="pk-sheet-title">' +
@@ -4951,8 +5176,8 @@ body > .pk-layer {
         el.classList.remove('pk-dragging');
         if (motion.reduced()) el.style.opacity = '0';
         else el.style.setProperty('--pk-y', tall() + margin + 20 + 'px');
-        dropDim(dim, dur('--dur-leave'));
-        after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+        dropDim(dim, dur('--dur-leave', el));
+        after(() => el.remove(), motion.reduced() ? dur('--dur-reduced', el) : dur('--dur-leave', el));
         emit(el, 'close', { why: why || 'close' });
         if (o.onClose) o.onClose(why || 'close');
       },
@@ -4964,9 +5189,9 @@ body > .pk-layer {
       el.style.opacity = '0';
       setAt(cur, 'snap');
       void el.offsetWidth;
-      el.style.transition = 'opacity ' + dur('--dur-reduced') + 'ms';
+      el.style.transition = 'opacity ' + dur('--dur-reduced', el) + 'ms';
       el.style.opacity = '1';
-      after(() => (el.style.transition = ''), dur('--dur-reduced'));
+      after(() => (el.style.transition = ''), dur('--dur-reduced', el));
     } else {
       el.style.setProperty('--pk-y', tall() + margin + 'px');
       void el.offsetWidth;
@@ -5047,12 +5272,12 @@ body > .pk-layer {
     return ctl;
   }
 
-  /* (43) Parts.cover({ title, html | node, name, onClose }) → { el, body, close() } */
+  /* (43) Parts.cover({ title, html | node, name, style, onClose }) → { el, body, close() } */
   function cover(o) {
     o = o || {};
     const el = doc.createElement('div');
     el.className = 'pk-cover';
-    el.dataset.name = nm(o, 'Full-screen cover');
+    named(el, o, 'Full-screen cover');
     el.setAttribute('role', 'dialog');
     el.innerHTML =
       '<div class="pk-bar-slot pk-right">' + closeBtn(o, 'pk-glass').replace('pk-sm ', '') + '</div><div class="pk-cover-body">' +
@@ -5075,7 +5300,7 @@ body > .pk-layer {
         untrack(ctl);
         el.classList.add('pk-leaving');
         el.classList.remove('pk-on');
-        after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+        after(() => el.remove(), motion.reduced() ? dur('--dur-reduced', el) : dur('--dur-leave', el));
         emit(el, 'close', { why: why || 'close' });
         if (o.onClose) o.onClose(why || 'close');
       },
@@ -5106,7 +5331,7 @@ body > .pk-layer {
   function unmorph(panel) {
     panel.classList.remove('pk-on');
     panel.classList.add('pk-leaving');
-    after(() => panel.remove(), Math.max(motion.spring('menu-close') * 0.6, dur('--dur-close'), motion.reduced() ? dur('--dur-reduced') : 0));
+    after(() => panel.remove(), Math.max(motion.spring('menu-close', panel) * 0.6, dur('--dur-close', panel), motion.reduced() ? dur('--dur-reduced', panel) : 0));
   }
 
   /* menus: items are { label, icon (svg text), red, disabled, value, sub: [items] } or '-' for a gap */
@@ -5136,7 +5361,7 @@ body > .pk-layer {
   function buildMenu(items, o, subsOn) {
     const m = doc.createElement('div');
     m.className = 'pk-menu pk-morph';
-    m.dataset.name = nm(o, 'Menu');
+    named(m, o, 'Menu');
     m.setAttribute('role', 'menu');
     m.innerHTML = menuRows(items, subsOn);
     // number the rows in order so a flattened submenu still picks the right item
@@ -5145,7 +5370,7 @@ body > .pk-layer {
     m._items = list;
     return m;
   }
-  /* Parts.menu(anchor, items, { key, name, place: 'left' | 'center' | 'right', onPick(item) }) → { el, close() }
+  /* Parts.menu(anchor, items, { key, name, style, place: 'left' | 'center' | 'right', onPick(item) }) → { el, close() }
      (16) a pull-down menu growing out of its button. (45, pinned) items with sub open a submenu where
      menu.submenus names the menu's key; elsewhere they're shown inline under a small label. */
   function menu(anchor, items, o) {
@@ -5165,7 +5390,7 @@ body > .pk-layer {
         if (sub) {
           const sb = sub;
           sb.classList.remove('pk-on');
-          after(() => sb.remove(), dur('--dur-fade'));
+          after(() => sb.remove(), dur('--dur-fade', sb));
         }
         dropDim(dim, 0);
         emit(anchor, 'close');
@@ -5197,7 +5422,7 @@ body > .pk-layer {
         if (x.back) {
           m.classList.remove('pk-recede');
           sb.classList.remove('pk-on');
-          after(() => sb.remove(), dur('--dur-recede'));
+          after(() => sb.remove(), dur('--dur-recede', sb));
           sub = null;
           return;
         }
@@ -5213,12 +5438,12 @@ body > .pk-layer {
     return ctl;
   }
 
-  /* (44) Parts.popover(anchor, html | node, { name }) → { el, close() }: grows out of its button; tap outside closes */
+  /* (44) Parts.popover(anchor, html | node, { name, style }) → { el, close() }: grows out of its button; tap outside closes */
   function popover(anchor, html, o) {
     o = o || {};
     const p = doc.createElement('div');
     p.className = 'pk-popover pk-morph';
-    p.dataset.name = nm(o, 'Popover');
+    named(p, o, 'Popover');
     p.innerHTML = content(html);
     place(p, html);
     const dim = dimLayer('pk-clear-dim', () => ctl.close());
@@ -5275,8 +5500,8 @@ body > .pk-layer {
         untrack(ctl);
         unmorph(m);
         clone.style.opacity = '0';
-        after(() => clone.remove(), dur('--dur-close'));
-        dropDim(dim, dur('--dur-close'));
+        after(() => clone.remove(), dur('--dur-close', m));
+        dropDim(dim, dur('--dur-close', m));
         emit(row, 'close');
       },
     });
@@ -5346,7 +5571,7 @@ body > .pk-layer {
     }
   }, true);
 
-  /* (47) Parts.choices({ title, actions: [{ label, red, value }], cancel, key, name }) → Promise of the picked action's
+  /* (47) Parts.choices({ title, actions: [{ label, red, value }], cancel, key, name, style }) → Promise of the picked action's
      value (its label if no value), or null for Cancel. An action sheet (choices 'actionSheet', D07) or a sheet. */
   function choices(o) {
     o = o || {};
@@ -5358,6 +5583,7 @@ body > .pk-layer {
         const sh = sheet({
           key: o.key,
           name: o.name || 'Choices',
+          style: o.style,
           title: o.title || '',
           html: '<div class="pk-list">' + acts.map((a, i) => '<button class="pk-row pk-tap" data-i="' + i + '" style="' + (a.red ? 'color:var(--danger)' : 'color:var(--accent)') + '"><span class="pk-row-text">' + esc(a.label) + '</span></button>').join('') + '</div>',
           onClose: () => done(picked),
@@ -5373,7 +5599,7 @@ body > .pk-layer {
       }
       const el = doc.createElement('div');
       el.className = 'pk-actions';
-      el.dataset.name = nm(o, 'Action sheet');
+      named(el, o, 'Action sheet');
       el.setAttribute('role', 'dialog');
       el.innerHTML =
         '<div class="pk-actions-group pk-glass pk-strong">' + (o.title ? '<div class="pk-actions-title">' + esc(o.title) + '</div>' : '') +
@@ -5391,8 +5617,8 @@ body > .pk-layer {
           untrack(ctl);
           el.classList.add('pk-leaving');
           el.classList.remove('pk-on');
-          dropDim(dim, dur('--dur-rise'));
-          after(() => el.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-rise'));
+          dropDim(dim, dur('--dur-rise', el));
+          after(() => el.remove(), motion.reduced() ? dur('--dur-reduced', el) : dur('--dur-rise', el));
           done(v === undefined ? null : v);
         },
       });
@@ -5405,7 +5631,7 @@ body > .pk-layer {
     });
   }
 
-  /* (48) Parts.confirm({ title, message, action: 'Delete', red: true, cancel: 'Cancel', name }) → Promise<boolean>.
+  /* (48) Parts.confirm({ title, message, action: 'Delete', red: true, cancel: 'Cancel', name, style }) → Promise<boolean>.
      An alert (confirm 'alert', D08: the app's own, never window.confirm) or a sheet. */
   function confirmBox(o) {
     o = o || {};
@@ -5416,6 +5642,7 @@ body > .pk-layer {
         const sh = sheet({
           key: o.key,
           name: o.name || 'Confirmation',
+          style: o.style,
           title: o.title || '',
           html:
             (o.message ? '<p class="pk-alert-text" style="text-align:center">' + esc(o.message) + '</p>' : '') +
@@ -5432,7 +5659,7 @@ body > .pk-layer {
       }
       const g = doc.createElement('div');
       g.className = 'pk-alert pk-glass pk-strong';
-      g.dataset.name = nm(o, 'Alert');
+      named(g, o, 'Alert');
       g.setAttribute('role', 'alertdialog');
       g.innerHTML =
         '<p class="pk-alert-title">' + esc(o.title || '') + '</p>' + (o.message ? '<p class="pk-alert-text">' + esc(o.message) + '</p>' : '') +
@@ -5449,8 +5676,8 @@ body > .pk-layer {
           untrack(ctl);
           g.classList.add('pk-leaving');
           g.classList.remove('pk-on');
-          dropDim(dim, dur('--dur-leave'));
-          after(() => g.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-leave'));
+          dropDim(dim, dur('--dur-leave', g));
+          after(() => g.remove(), motion.reduced() ? dur('--dur-reduced', g) : dur('--dur-leave', g));
           resolve(!!yes);
         },
       });
@@ -5461,14 +5688,14 @@ body > .pk-layer {
     });
   }
 
-  /* (49) Parts.toast(text, { undo: fn, undoLabel, ms, name }) → { el, close() }: one at a time; a new one replaces it */
+  /* (49) Parts.toast(text, { undo: fn, undoLabel, ms, name, style }) → { el, close() }: one at a time; a new one replaces it */
   let toastNow = null;
   function toast(text, o) {
     o = o || {};
     if (toastNow) toastNow.close();
     const t = doc.createElement('div');
     t.className = 'pk-toast pk-glass';
-    t.dataset.name = nm(o, 'Toast');
+    named(t, o, 'Toast');
     t.setAttribute('role', 'status');
     t.innerHTML = '<span>' + esc(text) + '</span>' + (o.undo ? '<button class="pk-toast-undo" data-name="Undo">' + esc(o.undoLabel || 'Undo') + '</button>' : '');
     layer().append(t);
@@ -5483,7 +5710,7 @@ body > .pk-layer {
         if (toastNow === ctl) toastNow = null;
         t.classList.add('pk-leaving');
         t.classList.remove('pk-on');
-        after(() => t.remove(), motion.reduced() ? dur('--dur-reduced') : dur('--dur-toast-out'));
+        after(() => t.remove(), motion.reduced() ? dur('--dur-reduced', t) : dur('--dur-toast-out', t));
       },
     };
     ctl.timer = later(ctl.close, o.ms || S.timing.toast);
@@ -5522,6 +5749,7 @@ body > .pk-layer {
     layer,
     rel,
     refresh: refreshAll,
+    differences,
     sheet,
     cover,
     menu,
@@ -5710,7 +5938,10 @@ H += part(44, 'Popover', 'e', 'Grows out of its button on the menu springs; its 
 H += part(46, 'Long-press menu', 'm', 'Hold a row. At 200 ms it lifts, growing to ×1.04; at 700 ms the menu opens (<code>timing.hold</code>). Dim 20% in light, 25% in dark, no blur. Closes in 170 ms. Moving more than 10 pt cancels; right-click opens it at once. Same menu style as pull-downs (16). <code>.pk-hold</code> and <code>pk:hold</code>',
   `<div class="pk-list" id="ctxList" data-name="Long-press list">${['Morning notes', 'Weekly plan', 'Recipes'].map(t => `<div class="pk-row pk-hold" data-name="Row: ${t}"><span class="pk-row-text">${t}<small>Hold me</small></span></div>`).join('')}</div>`);
 H += part(47, 'Action sheet', 'e', 'A list of actions from the bottom, with Cancel on its own (<code>choices</code> actionSheet, D07; or a sheet). <code>Parts.choices({…})</code>',
-  `<div class="gal-row">${openBtn('o-as', 'Show actions')}</div>`);
+  `<div class="gal-row">${openBtn('o-as', 'Show actions')}</div>
+  <p class="gal-pv" style="margin-top:12px"><b>One element can differ (new in 1.1).</b> The action sheet below carries its own timing in its style, <code>style: '--dur-rise: 900ms'</code>, so only it rises and leaves slower than the kit's 350 ms. Turn the switch off and it's back to the kit's. <code>Parts.differences()</code> lists it while it's on.</p>
+  <div class="gal-row">${openBtn('o-as-slow', 'Show slow actions')}</div>
+  <div class="pk-list" style="margin-top:10px">${swRow('Own timing (900 ms)', true).replace('data-name="Switch: Own timing (900 ms)"', 'id="slowSw" data-name="Switch: Own timing"')}</div>`);
 H += part(48, 'Alert', 'e', 'A centred box with two capsule buttons. Appears over 250 ms, scaling from 1.1 (<code>confirm</code> alert, D08; or a sheet). Never the browser\'s own confirm. <code>Parts.confirm({…})</code>',
   `<div class="gal-row">${openBtn('o-dlg', 'Delete…')}</div>`);
 H += part(49, 'Toast', 'e', 'Drops in from the top over 500 ms, stays 3 s (<code>timing.toast</code>), then leaves upward over 350 ms. Undo where something can be undone. <code>Parts.toast(text, {undo})</code>',
@@ -5727,7 +5958,7 @@ H += part(52, 'Finger glint and drag', 'pin', 'Press and drag. A soft glow follo
 
 /* ==SECTIONS== */
 
-H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in 1.0: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
+H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in the kit yet: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
 $('#wrap').innerHTML = H;
 
 
@@ -5785,6 +6016,8 @@ $('#o-cover').addEventListener('click', () => Parts.sheet({ key: 'cover', title:
 $('#o-pop').addEventListener('click', () => Parts.popover($('#o-pop'), `<b style="display:block;font-size:17px;margin-bottom:4px">Popover</b>Grows out of its button. Blur 10 at 12% white, fading in over 260 ms. Tap outside to close.`));
 $('#ctxList').addEventListener('pk:hold', e => e.detail.open([{ label: 'Copy', icon: ic('copy', 18) }, { label: 'Share', icon: ic('share', 18) }, { label: 'Favourite', icon: ic('heart', 18) }, '-', { label: 'Delete', icon: ic('trash', 18), red: true }], { name: 'Long-press menu', onPick: it => Parts.toast(it.label) }));
 $('#o-as').addEventListener('click', () => Parts.choices({ title: 'What would you like to do with “Weekly plan”?', actions: [{ label: 'Duplicate' }, { label: 'Move to folder' }, { label: 'Delete', red: true }] }).then(v => { if (v) Parts.toast(v === 'Delete' ? 'Deleted “Weekly plan”' : v, v === 'Delete' ? { undo: () => Parts.toast('Undone') } : null); }));
+$('#o-as-slow').addEventListener('click', () => Parts.choices({ title: 'This action sheet has its own timing', name: 'Slow action sheet', style: $('#slowSw').classList.contains('on') ? '--dur-rise: 900ms' : '',
+  actions: [{ label: 'Duplicate' }, { label: 'Move to folder' }] }));
 $('#o-dlg').addEventListener('click', () => Parts.confirm({ title: 'Delete “Weekly plan”?', message: "This can't be undone.", action: 'Delete' }).then(yes => { if (yes) Parts.toast('Deleted “Weekly plan”'); }));
 $('#o-toast').addEventListener('click', () => Parts.toast('Saved to Library', { undo: () => Parts.toast('Undone') }));
 

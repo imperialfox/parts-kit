@@ -8,6 +8,9 @@ Usage: python tools/check.py [shots-folder]        (needs Python and Playwright:
    followed and its springs match the kit's.
 3. The demo page (bundled, as published) at 402 × 874 and 820 × 1180, in light and dark, with Reduce transparency,
    Reduce Motion and motion off: screenshots, and no errors, sideways scroll, "NaN", "undefined" or "null".
+   2b. Differences (1.1): a spring override changes only its spring, in the CSS and the code; one element's timing or
+   spring changes only that element; Parts.differences() lists exactly what changed; nothing moves under Reduce
+   Motion or at speed 0; bad overrides are refused and left as they were; opening a sheet and a menu stays quick.
 4. Every behaviour, and every setting both ways (BEHAVIOURS below).
 Prints each problem and exits 1 if there are any.
 """
@@ -133,6 +136,85 @@ def settings_checks(browser, base):
     ok(r["gentle"] == "999ms", "with motion: 'app' the app's own springs are left to the app")
     ok(r["speed"] == "1" and r["speed4"] == "4" and int(r["snap4"][:-2]) > int(r["snap"][:-2]) * 3, f"the kit follows the app's speed ({r})")
     ok(r["bad"] == ["gentle"], "a spring that differs from the app's is found")
+    ok(not errs, f"no errors on the plain page ({errs[:1]})")
+    page.close()
+
+
+# ------------------------------------------------------------------------------------------------ 2b. differences
+def differences_checks(browser, base):
+    print("Differences")
+    page = browser.new_page()
+    errs = []
+    page.on("pageerror", lambda e: errs.append(str(e)))
+    page.goto(base + "tools/plain.html")
+    page.wait_for_function("window.Parts")
+    keys = "() => Parts.differences().map(d => d.key)"
+    ok(page.evaluate(keys) == [], f"differences: none on a page that changes nothing ({page.evaluate(keys)})")
+    # an app-wide spring: only that spring changes, in the CSS and in the code; null puts it back
+    r = page.evaluate("""() => {
+      const st = document.documentElement.style, names = Object.keys(Parts.motion.SPRINGS);
+      const read = () => Object.fromEntries(names.map(k => [k, [st.getPropertyValue('--ease-' + k), st.getPropertyValue('--dur-' + k), Parts.motion.spring(k)]]));
+      const a = read(); const p = Parts.settings({ springs: { press: { z: 0.9, f: 2 } } }); const b = read();
+      const changed = names.filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+      const want = Parts.motion.curve(0.9, 2).ms;
+      const out = { p, changed, css: parseInt(b.press[1]), code: b.press[2], want, kit: a.press[2] };
+      Parts.settings({ springs: { press: null } }); out.back = JSON.stringify(read()) === JSON.stringify(a); out.left = Parts.current.springs;
+      return out; }""")
+    ok(r["p"] == [] and r["changed"] == ["press"], f"a spring override changes only its own spring ({r['changed']})")
+    ok(r["css"] == r["want"] and r["code"] == r["want"] and r["want"] != r["kit"], f"the override reaches the CSS and the code alike ({r})")
+    ok(r["back"] and r["left"] == {}, "null gives a spring back to the kit")
+    # bad overrides are refused and leave the setting as it was
+    r = page.evaluate("""() => { Parts.settings({ springs: { snap: { z: 0.7, f: 3 } } });
+      const tries = [{ presss: { z: 0.8, f: 3 } }, { press: { z: 1.5, f: 3 } }, { press: { z: 0.8 } }, { press: { z: 0.8, f: 3, x: 1 } }, { press: { z: '0.8', f: 3 } }, { press: { z: 0.8, f: 0 } }, 'soft', [1]];
+      const got = tries.map(t => Parts.settings({ springs: t }).length);
+      const left = Parts.current.springs, dur = getComputedStyle(document.documentElement).getPropertyValue('--dur-press');
+      Parts.settings({ springs: { snap: null } }); return { got, left, dur, kit: Parts.motion.curve(0.75, 4).ms }; }""")
+    ok(r["got"] == [1] * 8, f"every bad spring override is refused ({r['got']})")
+    ok(r["left"] == {"snap": {"z": 0.7, "f": 3}} and int(r["dur"][:-2]) == r["kit"], f"a refused override leaves the springs as they were ({r})")
+    # one element: its own timing and its own spring; its neighbours keep theirs
+    r = page.evaluate("""async () => {
+      const box = document.createElement('div'), a = document.createElement('div'), b = document.createElement('div'), kid = document.createElement('span');
+      a.dataset.name = 'Own'; a.style.cssText = '--dur-rise: 600ms; --spring-sheet: gentle'; b.dataset.name = 'Neighbour'; a.append(kid); box.append(a, b); document.body.append(box);
+      await new Promise(r => setTimeout(r, 0));
+      const v = (el, n) => getComputedStyle(el).getPropertyValue(n).trim();
+      const out = { rise: [v(a, '--dur-rise'), v(kid, '--dur-rise'), v(b, '--dur-rise')], sheet: [v(a, '--dur-sheet'), v(b, '--dur-sheet'), v(a, '--dur-gentle')],
+        code: [Parts.motion.spring('sheet', a), Parts.motion.spring('sheet', b), Parts.motion.spring('gentle')],
+        diff: Parts.differences().map(d => d.key) };
+      a.style.removeProperty('--spring-sheet'); await new Promise(r => setTimeout(r, 0));
+      out.off = [v(a, '--dur-sheet') === v(b, '--dur-sheet'), Parts.differences().map(d => d.key)];
+      box.remove(); return out; }""")
+    ok(r["rise"] == ["600ms", "600ms", "350ms"], f"an element's own timing changes only it and what's inside it ({r['rise']})")
+    ok(r["sheet"][0] == r["sheet"][2] and r["sheet"][0] != r["sheet"][1], f"an element's own spring reaches its CSS, not its neighbour's ({r['sheet']})")
+    ok(r["code"][0] == r["code"][2] and r["code"][1] != r["code"][0], f"the code follows an element's own spring ({r['code']})")
+    ok(r["diff"] == ["element Own › --dur-rise", "element Own › spring sheet"], f"differences: one element, exactly ({r['diff']})")
+    ok(r["off"][0] and r["off"][1] == ["element Own › --dur-rise"], f"taking --spring-… away gives the element the kit's spring again ({r['off']})")
+    # the whole list at once, then nothing again
+    r = page.evaluate("""async () => {
+      const css = document.createElement('style'); css.textContent = ':root { --dur-close: 250ms; --ease-decel: ease-out }'; document.head.append(css);
+      Parts.settings({ springs: { release: { z: 0.6, f: 3.2 } }, segmented: { style: 'squish' }, timing: { hold: 500 } });
+      const el = document.createElement('div'); el.id = 'solo'; el.style.cssText = '--dur-fade: 0.4s'; document.body.append(el);
+      const all = Parts.differences(); const keys = all.map(d => d.key), texts = all.map(d => d.text);
+      css.remove(); el.remove(); Parts.settings({ springs: { release: null }, segmented: { style: 'gallery' }, timing: { hold: 700 } });
+      return { keys, texts, after: Parts.differences().map(d => d.key) }; }""")
+    want = ["setting segmented.style", "setting timing.hold", "spring release", "timing --ease-decel", "timing --dur-close", "element #solo › --dur-fade"]
+    ok(sorted(r["keys"]) == sorted(want), f"differences: the app-wide list is exact ({r['keys']})")
+    ok(r["after"] == [], f"differences: back to none once they're gone ({r['after']})")
+    ok(not any(BAD.search(t) for t in r["texts"]), f"differences read cleanly ({r['texts'][:2]})")
+    # Reduce Motion and speed 0 win over every override
+    r = page.evaluate("""async () => {
+      Parts.settings({ springs: { press: { z: 0.9, f: 2 } } });
+      const el = document.createElement('div'); el.style.cssText = '--spring-nav: ripple'; document.body.append(el); await new Promise(r => setTimeout(r, 0));
+      const st = document.documentElement.style, read = () => [st.getPropertyValue('--dur-press'), Parts.motion.spring('press'), getComputedStyle(el).getPropertyValue('--dur-nav').trim(), Parts.motion.spring('nav', el)];
+      Parts.motion.setSpeed(0); const off = read(); Parts.motion.setSpeed(1);
+      Parts.motion.setReduced(true); const red = read(); Parts.motion.setReduced(null);
+      el.remove(); Parts.settings({ springs: { press: null } }); return { off, red }; }""")
+    ok(r["off"] == ["0ms", 0, "0ms", 0] and r["red"] == ["0ms", 0, "0ms", 0], f"Reduce Motion and speed 0: overridden springs don't move ({r})")
+    # the Vocal Sessions sample: motion 'kit' and an empty springs line
+    sample = (KIT / "samples/vocal-sessions.settings.js").read_text(encoding="utf-8")
+    ok(re.search(r"motion: 'kit', // D18", sample) and re.search(r"springs: \{\},", sample), "the Vocal Sessions sample says motion: 'kit' (D18) and has an empty springs line")
+    got = page.evaluate("(src) => { const before = Parts.problems.length; new Function(src)(); return { p: Parts.problems.slice(before), d: Parts.differences().map(d => d.key) }; }", sample)
+    ok(got["p"] == [], f"the Vocal Sessions sample loads cleanly on 1.1 ({got['p']})")
+    print(f"  the sample's differences from the kit: {got['d'] or 'none'}")
     ok(not errs, f"no errors on the plain page ({errs[:1]})")
     page.close()
 
@@ -614,6 +696,58 @@ def pinned(page):
 
 
 @behaviour
+def one_element(page):
+    # (47) the demo element with its own timing: only it rises slower, the switch gives it the kit's, and the demo's
+    # own differences are exactly what it sets (the way an app's test checks its list, one decision per line)
+    want = {"setting sheet.withStops": "demo", "setting sheet.growsToFull": "demo", "setting sheet.fullScreen": "demo",
+            "setting menu.submenus": "demo", "setting glass.appear": "demo", "setting press.glint": "demo"}
+    keys = page.evaluate("Parts.differences().map(d => d.key)")
+    ok(sorted(keys) == sorted(want), f"the demo's differences are exactly its list ({keys})")
+    scroll_to(page, "#p47")
+    def rise(btn):
+        page.click(btn)
+        page.wait_for_function("document.querySelector('.pk-actions.pk-on')")
+        page.wait_for_timeout(50)
+        t = page.evaluate("getComputedStyle(document.querySelector('.pk-actions')).transitionDuration")
+        k = page.evaluate("Parts.differences().map(d => d.key).filter(k => k.startsWith('element'))")
+        page.evaluate("Parts.closeAll()")
+        page.wait_for_timeout(450)
+        left = page.evaluate("document.querySelectorAll('.pk-actions').length")
+        page.wait_for_timeout(700)
+        return t, k, left, page.evaluate("document.querySelectorAll('.pk-actions').length")
+    t0, k0, l0, g0 = rise("#o-as")
+    t1, k1, l1, g1 = rise("#o-as-slow")
+    ok(t0 == "0.35s" and t1 == "0.9s", f"only the slow action sheet rises over 900 ms ({t0}, {t1})")
+    ok(l0 == 0 and l1 == 1 and g1 == 0, f"the code waits for the element's own timing before removing it ({l0}, {l1}, {g1})")
+    ok(k0 == [] and k1 == ["element Slow action sheet › --dur-rise"], f"differences list the element while it's open ({k1})")
+    x, y = center(page, "#slowSw")
+    page.mouse.click(x, y)
+    page.wait_for_timeout(450)
+    t2, k2, _, _ = rise("#o-as-slow")
+    ok(t2 == "0.35s" and k2 == [], f"the switch gives it the kit's timing again ({t2}, {k2})")
+    # Reduce Motion: the slow one only fades, in the short fade
+    page.evaluate("Kit.set('Motion', 2)")
+    page.mouse.click(x, y)
+    page.wait_for_timeout(300)
+    page.click("#o-as-slow")
+    page.wait_for_function("document.querySelector('.pk-actions.pk-on')")
+    tr = page.evaluate("getComputedStyle(document.querySelector('.pk-actions')).translate")
+    page.evaluate("Parts.closeAll()")
+    page.wait_for_timeout(250)
+    ok(tr in ("none", "0px", "0px 0px") and page.evaluate("document.querySelectorAll('.pk-actions').length") == 0,
+       f"Reduce Motion: an element's own timing brings back no movement ({tr})")
+    page.evaluate("Kit.set('Motion', 0)")
+    # reading timings from each element stays quick: a sheet and a menu open in a few milliseconds
+    r = page.evaluate("""() => { const t = []; for (let i = 0; i < 5; i++) {
+      let a = performance.now(); const s = Parts.sheet({ html: '<p>x</p>', style: '--dur-leave: 500ms' }); t.push(['sheet', performance.now() - a]); s.close();
+      a = performance.now(); const m = Parts.menu(document.querySelector('#moreBtn'), [{ label: 'A' }, { label: 'B' }]); t.push(['menu', performance.now() - a]); m.close(); }
+      const a = performance.now(); Parts.differences(); return { t, diff: performance.now() - a }; }""")
+    worst = max(x[1] for x in r["t"])
+    print(f"  opening a sheet or menu: at most {worst:.1f} ms; Parts.differences() on the whole gallery: {r['diff']:.0f} ms")
+    ok(worst < 40, f"opening a sheet or menu stays quick ({worst:.1f} ms)")
+
+
+@behaviour
 def settings_both_ways(page):
     page.evaluate("Parts.motion.setSpeed(0)")
     # sheet lists: a name not listed gets no stops, can't grow and isn't a cover
@@ -652,6 +786,7 @@ def main():
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         settings_checks(browser, base)
+        differences_checks(browser, base)
         looks(browser, url, shots)
         print("Behaviours")
         for fn in BEHAVIOURS:

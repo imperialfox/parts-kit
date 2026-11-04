@@ -1,14 +1,15 @@
 # Parts kit
 
-![version](https://img.shields.io/badge/version-1.0.0-007aff)
+![version](https://img.shields.io/badge/version-1.1.0-007aff)
 
-**Current version:** 1.0.0 · 4 Nov 2026 · [changelog](CHANGELOG.md)
+**Current version:** 1.1.0 · 4 Nov 2026 · [changelog](CHANGELOG.md)
 
 One set of Liquid Glass parts (sheets, menus, alerts, switches, the tab bar and the rest), built once, that any web app or prototype loads with a small settings file of its own. The parts look and move like iOS 26/27, using numbers measured against real iPhones where they exist. It belongs to no app, so any app can use it.
 
 - **Two files:** `parts-kit.css` and `parts-kit.js`. No framework and no build step.
 - **One settings file per app:** each design decision is one line, so changing one is a one-line edit.
 - **Named values:** every corner, press, curve and duration has a name; your app's own value with the same name wins.
+- **The kit leads the motion, and an app can differ on purpose:** for the whole app or one element, with every difference listed by `Parts.differences()` (see [Differences from the kit](#differences-from-the-kit)).
 - **Its own demo:** the Parts gallery (`demo/index.html`), every part with its number, both ways of every setting in the controls panel.
 
 Numbers come from [sdegenaar/liquid_glass_widgets](https://github.com/sdegenaar/liquid_glass_widgets) (MIT), whose authors measured many of them against native iOS. "Measured" below means theirs were timed against a real iPhone; "by eye" means their tuning.
@@ -46,7 +47,8 @@ Numbers come from [sdegenaar/liquid_glass_widgets](https://github.com/sdegenaar/
 | Setting | Values (default first) | What it does |
 |---|---|---|
 | `app` | text | The app's name (for notes only). |
-| `motion` | `'kit'`, `'app'` | `'app'` uses the app's own `window.MOTION` (springs, speed, Reduce Motion) so there's one set; the kit adds only the springs the app lacks. |
+| `motion` | `'kit'`, `'app'` | `'kit'`: the kit runs the motion (springs, speed, Reduce Motion). `'app'` uses the app's own motion object instead, and **needs it on `window` as `window.MOTION`** (a `const MOTION` in a script isn't on `window`, so the kit can't see it); the kit then adds only the springs the app lacks. |
+| `springs` | `{}` | The app's own numbers for any of the kit's named springs, one line each with its decision ID: `press: { z: 0.8, f: 3.6 }, // D19`. `z` is the damping ratio (0.05 to 1), `f` the frequency in Hz (0.1 to 20). The CSS and the code both use it everywhere that spring is used. An unknown name or a bad number is refused. `null` gives a spring back to the kit's. |
 | `root` | `null` (the page), a selector or element | Where overlays go. Set it when the app lives inside one element. |
 | `tabBar.fold` | `false`, `true` | The tab bar folds into a pill after 20 pt of scrolling down and opens after 12 pt up. |
 | `tabBar.searchGap` | `8` | Points between the tab bar and its search circle. |
@@ -74,7 +76,8 @@ Example (`samples/vocal-sessions.settings.js` is a full one):
 ```js
 Parts.settings({
   app: 'My app',
-  motion: 'app',                                   // use the app's MOTION springs
+  motion: 'kit',                                   // D18 the kit runs the motion
+  springs: { press: { z: 0.8, f: 3.6 } },          // D19 a softer press, for this app only
   tabBar: { fold: false, searchGap: 8 },           // D01, D02
   sheet: { withStops: ['newItem'], growsToFull: ['newItem'] }, // D09, D10
   menu: { submenus: [] },                          // D11, pinned: built, not used yet
@@ -103,8 +106,39 @@ The rule: nothing below the defaults block writes its own corner, press, curve o
 - **Springs** are a damping ratio ζ and a frequency in Hz, sampled into CSS `linear()` and published on `<html>` as `--ease-<name>` and `--dur-<name>`: `gentle`, `nav`, `ripple`, `press`, `release` (the measured glass press), `snap` (highlights settling, 350 ms), `bloom`, `settle`, `pill`, `sheet`, `menu-open`, `menu-close`.
 - **Speed:** `Parts.motion.setSpeed(n)`: 1 normal, 4 slow (for tuning), 0 off (for tests). Fixed durations are multiplied by `--pk-speed`.
 - **Reduce Motion:** follows the device, or `Parts.motion.setReduced(true | false | null)`. `<html>` gets `.motion-reduced`: no movement or growth, short fades (`--dur-reduced`). Motion off adds `.motion-off`.
-- **An app with its own MOTION** sets `motion: 'app'`; the kit follows its speed and Reduce Motion, and `Parts.motion.compare()` lists any spring the two define differently (it should be empty).
+- **An app's own springs:** `springs: {…}` in the settings changes a named spring for the whole app (see [Differences from the kit](#differences-from-the-kit)). `Parts.motion.springs()` gives the springs in use; `Parts.motion.SPRINGS` stays the kit's own.
+- **Reduce Motion and motion off always win.** An override, app-wide or on one element, never brings back movement under Reduce Motion, and speed 0 still stops everything.
+- **An app with its own MOTION** sets `motion: 'app'` and puts it on `window` (`window.MOTION = MOTION`); the kit follows its speed and Reduce Motion, and `Parts.motion.compare()` lists any spring the two define differently (it should be empty). With `motion: 'app'`, the app's MOTION decides the springs it has.
 - **Reduce transparency:** put `.glass-solid` on `<html>` (or any ancestor); glass uses `--glass-rt` and keeps its blur.
+
+## Differences from the kit
+
+The kit is the one source of motion. An app can still differ in three ways, each written down where it can be found:
+
+1. **A timing for the whole app:** set the named value in the app's stylesheet, e.g. `:root { --dur-close: 220ms; } /* D20 menus close slower */`. It wins over the kit's (the kit's defaults have zero weight).
+2. **A spring for the whole app:** a line in `springs: {…}` in the settings file (above).
+3. **A timing or spring for one element only:**
+   - A timing in the element's `style`, with the same names: `style="--dur-rise: 600ms"`. The kit reads timings from the element first, then its parents, then the page, the same order the CSS follows. Whatever is inside the element follows it too; its neighbours keep theirs.
+   - A spring in the element's `style`: `--spring-<name>: <another spring>`, e.g. `style="--spring-sheet: gentle"`. The kit fills in that element's `--ease-sheet` and `--dur-sheet` from the chosen spring, so the CSS follows it at every speed. In a stylesheet, write those two lines yourself: `.slow-sheet { --ease-sheet: var(--ease-gentle); --dur-sheet: var(--dur-gentle); }`.
+   - For overlays the kit makes, pass `style` to the call: `Parts.sheet({ key: 'newItem', style: '--dur-leave: 500ms', … })`. `Parts.cover`, `Parts.menu`, `Parts.popover`, `Parts.choices`, `Parts.confirm` and `Parts.toast` take it too. Or target the overlay's name in the stylesheet: `.pk-sheet[data-name="New item"] { --dur-leave: 500ms; }`.
+   - To switch one off, take the line out of the style.
+
+**`Parts.differences()`** lists every spring, timing and setting where the app differs from the kit: settings that aren't the kit's defaults, every line in `springs`, every named timing in the app's stylesheet, and every element on the current screen whose timing or spring differs from its parent's. Each entry has a `key` (`'setting segmented.style'`, `'spring press'`, `'timing --dur-close'`, `'element New item › --dur-leave'`, `'element New item › spring sheet'`), the app's value, the kit's value (for an element, the value around it) and a `text` line. Pass `{ root }` to look at one part of the page.
+
+**Checking it in the app's own test:** keep a list with a decision ID on each line, and fail on any difference that isn't on the list (and any line that no longer differs), the same way the value test's known list works:
+
+```js
+const KNOWN = {
+  'setting sheet.withStops': 'D09',
+  'spring press': 'D19',
+  'timing --dur-close': 'D20',
+};
+const found = Parts.differences().map((d) => d.key);
+const extra = found.filter((k) => !KNOWN[k]);      // a difference nobody decided: fails
+const stale = Object.keys(KNOWN).filter((k) => !found.includes(k)); // a decision that no longer differs: fails
+```
+
+Run it on each screen the app's test opens, so one-element differences are seen where they live. If a later kit version improves a spring the app overrides, the app keeps its own numbers; the list shows it on every build, so it's never by accident.
 
 ## Gestures
 
@@ -181,23 +215,23 @@ Menu items are `{ label, icon, red, disabled, value, sub }` or `'-'` for a gap. 
 | 50 | Glass appearing and leaving | `Parts.appear(el, { key })`, `Parts.leave(el, { key })` | Measured: 250 ms in (from ×1.15), 350 ms out. |
 | 52 | Finger glint and drag | `data-glint="name"` on a `.pk-press` button, name in `press.glint` | Glow 1.6 × the short side; leans at most 4 pt. |
 
-**Not in 1.0:** inline tab bar (7), toolbar (8), side bar (9), page dots (20) come later if needed. Password and form fields (28, 30), picker and date wheels (31, 32) and the disclosure group (37) aren't planned.
+**Not in the kit yet:** inline tab bar (7), toolbar (8), side bar (9), page dots (20) come later if needed. Password and form fields (28, 30), picker and date wheels (31, 32) and the disclosure group (37) aren't planned.
 
 ## Other calls
 
-`Parts.version`, `Parts.current` (the settings in force), `Parts.problems`, `Parts.check()`, `Parts.allowed(group, key)`, `Parts.own()`, `Parts.refresh()` (place bar highlights now; the kit also does it when the page changes), `Parts.layer()`, `Parts.rel(el)`, `Parts.open` (how many overlays are open), `Parts.N` (gesture numbers), `Parts.SCHEMA`, `Parts.DEFAULTS`.
+`Parts.version`, `Parts.current` (the settings in force), `Parts.differences()` (above), `Parts.problems`, `Parts.check()`, `Parts.allowed(group, key)`, `Parts.own()`, `Parts.refresh()` (place bar highlights now; the kit also does it when the page changes), `Parts.layer()`, `Parts.rel(el)`, `Parts.open` (how many overlays are open), `Parts.N` (gesture numbers), `Parts.SCHEMA`, `Parts.DEFAULTS`.
 
 ## The demo and the checks
 
 - `demo/index.html` is the Parts gallery: every part with its number, built on the kit's own parts and shown in the pinned prototype kit's frame (`demo/vendor/prototype-kit/`, used only by the demo). The controls panel switches every setting both ways.
 - `python tools/bundle.py` makes `dist/parts-gallery.html`, one file for the Claude artifact viewer.
-- `python tools/check.py [shots]` (needs Playwright) runs everything: the value rule, the two dark blocks identical, no personal data or app names in the kit, the pinned copies and checksums; settings refused and accepted, the sample settings, an app's MOTION followed; the gallery at 402 × 874 and 820 × 1180 in light, dark, Reduce transparency, Reduce Motion and motion off (screenshots, no errors, no sideways scroll, no "NaN", "undefined" or "null"); and every behaviour and setting both ways.
+- `python tools/check.py [shots]` (needs Playwright) runs everything: the value rule, the two dark blocks identical, no personal data or app names in the kit, the pinned copies and checksums; settings refused and accepted, the sample settings, an app's MOTION followed; spring overrides, one-element timings and springs, `Parts.differences()`, overrides under Reduce Motion and speed 0; the gallery at 402 × 874 and 820 × 1180 in light, dark, Reduce transparency, Reduce Motion and motion off (screenshots, no errors, no sideways scroll, no "NaN", "undefined" or "null"); and every behaviour and setting both ways.
 - `tools/plain.html` is a plain page with no app, for checking the kit stands on its own.
 
 ## Files
 
 - `parts-kit.css`, `parts-kit.js`: the kit. `SHA256SUMS.txt`: their checksums.
-- `samples/vocal-sessions.settings.js`: a full settings file for one app (decisions D01–D17).
+- `samples/vocal-sessions.settings.js`: a full settings file for one app (decisions D01–D18).
 - `demo/`: the Parts gallery. `tools/`: check, value rule, bundle, plain page.
 - `HANDOFF.md`: what was approved and built. `docs/blueprint.md`: the plan and the decisions behind it.
 

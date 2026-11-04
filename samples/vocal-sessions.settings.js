@@ -1,10 +1,13 @@
 /* Sample settings file: Vocal Sessions (js/parts.settings.js once it moves onto the kit).
-   One line per decision in its register (D01–D17); search a decision's ID to find its line.
+   One line per decision in its register (D01–D18); search a decision's ID to find its line.
+   Each difference from the kit's motion gets its own line with its ID: a spring in springs: {…} below, or a timing in
+   css/app.css. The app's own test checks Parts.differences() against its list (README › Differences).
    D16 and D17 are stylesheet values, not settings: they live in the app's css/app.css under their names
    (menus use var(--r-card), D16; --r-sheet is 46, the screen's own corners, D17). */
 Parts.settings({
   app: 'Vocal Sessions',
-  motion: 'app', // use the app's own MOTION springs (js/motion.js), so there's one set
+  motion: 'kit', // D18 the kit runs the motion: its springs, speed and Reduce Motion
+  springs: {}, // D18 the app's own springs, one line each with its ID, e.g. press: { z: 0.8, f: 3.6 }, // D19 softer press
   tabBar: { fold: false, searchGap: 8 }, // D01 never folds · D02 search circle 8 pt from the bar
   segmented: { style: 'gallery' }, // D04 the gallery's knob: 350 ms spring, swells to glass, draggable
   row: { press: 'highlight' }, // D06 rows highlight while pressed, no shrink

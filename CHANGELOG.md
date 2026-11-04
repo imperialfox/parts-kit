@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.0 · 4 Nov 2026
+
+*The kit leads the motion, and an app can differ on purpose, with every difference listed*
+
+**Differences from the kit**
+- `springs: { name: { z, f } }` in the settings changes one of the kit's named springs for the whole app, in the CSS and the code alike. Unknown names and bad numbers are refused; `null` gives a spring back to the kit's.
+- One element can carry its own timing (`style="--dur-rise: 600ms"`) or spring (`style="--spring-sheet: gentle"`). The kit's code now reads timings from the element first, then its parents, then the page, the same order the CSS follows.
+- Overlay calls (`Parts.sheet`, `cover`, `menu`, `popover`, `choices`, `confirm`, `toast`) take a `style` option, so an overlay the kit makes can carry its own timing too.
+- `Parts.differences()` lists every spring, timing and setting where the app differs from the kit, for the whole app and for single elements on the current screen. The README shows how an app's own test checks it against a list with a decision ID per line.
+- Reduce Motion and motion off still win over every override.
+
+**Also**
+- The README says `motion: 'app'` needs the app's motion object on `window` (`window.MOTION`). `motion: 'kit'` is unchanged.
+- The Vocal Sessions sample settings say `motion: 'kit', // D18` and have an empty `springs: {}` line.
+- `Parts.motion.springs()` gives the springs in use; `Parts.motion.spring()` and `Parts.motion.ease()` take an element to follow its own spring.
+- The Parts gallery's action sheet (47) has a demo with its own timing and a switch to turn it off.
+- `tools/check.py`: spring overrides, one-element timings and springs, `Parts.differences()`, overrides under Reduce Motion and speed 0, bad overrides refused, and how quickly a sheet and a menu open.
+
 ## 1.0.0 · 4 Nov 2026
 
 *The first release: one set of Liquid Glass parts for any app or prototype*

@@ -233,7 +233,10 @@ H += part(44, 'Popover', 'e', 'Grows out of its button on the menu springs; its 
 H += part(46, 'Long-press menu', 'm', 'Hold a row. At 200 ms it lifts, growing to ×1.04; at 700 ms the menu opens (<code>timing.hold</code>). Dim 20% in light, 25% in dark, no blur. Closes in 170 ms. Moving more than 10 pt cancels; right-click opens it at once. Same menu style as pull-downs (16). <code>.pk-hold</code> and <code>pk:hold</code>',
   `<div class="pk-list" id="ctxList" data-name="Long-press list">${['Morning notes', 'Weekly plan', 'Recipes'].map(t => `<div class="pk-row pk-hold" data-name="Row: ${t}"><span class="pk-row-text">${t}<small>Hold me</small></span></div>`).join('')}</div>`);
 H += part(47, 'Action sheet', 'e', 'A list of actions from the bottom, with Cancel on its own (<code>choices</code> actionSheet, D07; or a sheet). <code>Parts.choices({…})</code>',
-  `<div class="gal-row">${openBtn('o-as', 'Show actions')}</div>`);
+  `<div class="gal-row">${openBtn('o-as', 'Show actions')}</div>
+  <p class="gal-pv" style="margin-top:12px"><b>One element can differ (new in 1.1).</b> The action sheet below carries its own timing in its style, <code>style: '--dur-rise: 900ms'</code>, so only it rises and leaves slower than the kit's 350 ms. Turn the switch off and it's back to the kit's. <code>Parts.differences()</code> lists it while it's on.</p>
+  <div class="gal-row">${openBtn('o-as-slow', 'Show slow actions')}</div>
+  <div class="pk-list" style="margin-top:10px">${swRow('Own timing (900 ms)', true).replace('data-name="Switch: Own timing (900 ms)"', 'id="slowSw" data-name="Switch: Own timing"')}</div>`);
 H += part(48, 'Alert', 'e', 'A centred box with two capsule buttons. Appears over 250 ms, scaling from 1.1 (<code>confirm</code> alert, D08; or a sheet). Never the browser\'s own confirm. <code>Parts.confirm({…})</code>',
   `<div class="gal-row">${openBtn('o-dlg', 'Delete…')}</div>`);
 H += part(49, 'Toast', 'e', 'Drops in from the top over 500 ms, stays 3 s (<code>timing.toast</code>), then leaves upward over 350 ms. Undo where something can be undone. <code>Parts.toast(text, {undo})</code>',
@@ -250,7 +253,7 @@ H += part(52, 'Finger glint and drag', 'pin', 'Press and drag. A soft glow follo
 
 /* ==SECTIONS== */
 
-H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in 1.0: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
+H += `<div class="gal-empty" id="empty">No parts match.</div><p class="gal-foot" data-name="Footer">${NUMS.length} parts · parts kit ${Parts.version} · numbers from sdegenaar/liquid_glass_widgets (MIT) · not in the kit yet: 7 inline tab bar, 8 toolbar, 9 side bar, 20 page dots (later); 28 password field, 30 form field, 31 picker wheel, 32 date picker, 37 disclosure group (not planned)</p>`;
 $('#wrap').innerHTML = H;
 
 
@@ -308,6 +311,8 @@ $('#o-cover').addEventListener('click', () => Parts.sheet({ key: 'cover', title:
 $('#o-pop').addEventListener('click', () => Parts.popover($('#o-pop'), `<b style="display:block;font-size:17px;margin-bottom:4px">Popover</b>Grows out of its button. Blur 10 at 12% white, fading in over 260 ms. Tap outside to close.`));
 $('#ctxList').addEventListener('pk:hold', e => e.detail.open([{ label: 'Copy', icon: ic('copy', 18) }, { label: 'Share', icon: ic('share', 18) }, { label: 'Favourite', icon: ic('heart', 18) }, '-', { label: 'Delete', icon: ic('trash', 18), red: true }], { name: 'Long-press menu', onPick: it => Parts.toast(it.label) }));
 $('#o-as').addEventListener('click', () => Parts.choices({ title: 'What would you like to do with “Weekly plan”?', actions: [{ label: 'Duplicate' }, { label: 'Move to folder' }, { label: 'Delete', red: true }] }).then(v => { if (v) Parts.toast(v === 'Delete' ? 'Deleted “Weekly plan”' : v, v === 'Delete' ? { undo: () => Parts.toast('Undone') } : null); }));
+$('#o-as-slow').addEventListener('click', () => Parts.choices({ title: 'This action sheet has its own timing', name: 'Slow action sheet', style: $('#slowSw').classList.contains('on') ? '--dur-rise: 900ms' : '',
+  actions: [{ label: 'Duplicate' }, { label: 'Move to folder' }] }));
 $('#o-dlg').addEventListener('click', () => Parts.confirm({ title: 'Delete “Weekly plan”?', message: "This can't be undone.", action: 'Delete' }).then(yes => { if (yes) Parts.toast('Deleted “Weekly plan”'); }));
 $('#o-toast').addEventListener('click', () => Parts.toast('Saved to Library', { undo: () => Parts.toast('Undone') }));
 

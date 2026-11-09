@@ -48,6 +48,9 @@ Any other part.
 3. **One action in `actions`** stays side by side with Cancel (two buttons), answering its value or `null`.
 4. **Order when stacked:** the actions as given, top to bottom, then Cancel at the bottom, as iOS alerts do.
 
+- The Parts gallery (artifact `174c215e-…`) republished on 1.3 as version `1794186630-99fd`; its page id is unchanged, so notes keep their place.
+- **Build receipt:** Parts kit 1.3 · L → L–M · 38 steps · 30k written · 7.9M re-read · 1 full test run (also in `BUILD_RECEIPTS.md`).
+
 **What's left**
 - Q56 · Settings: Reset All Alert can now pin 1.3.0.
 - Parts kit 1.4.0 (the Liquid Glass tab bar bubble) is Rendered and builds on top of this; it waits for Ivan's Build.

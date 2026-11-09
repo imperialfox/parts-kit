@@ -166,7 +166,7 @@ body.kit-phone .kit-ihd{display:flex;align-items:center;justify-content:space-be
 
 </style>
 <style id="pk-css">
-/* Parts kit 1.2.0 · one set of Liquid Glass parts for any app or prototype.
+/* Parts kit 1.3.0 · one set of Liquid Glass parts for any app or prototype.
    MIT licence. Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
    Load this file first, then your app's own stylesheet: any value below that your app also sets is yours.
    Every corner, press, curve and duration the parts use is named in the defaults block; nothing below it writes its
@@ -1973,7 +1973,7 @@ body > .pk-layer {
   font-weight: 600;
 }
 
-/* (48) alert: a centred box with two capsule buttons; appears over 250 ms from ×1.1 (confirm 'alert', D08) */
+/* (48) alert: a centred box with two capsule buttons, or three or more stacked with Cancel last (1.3); appears over 250 ms from ×1.1 (confirm 'alert', D08) */
 .pk-alert {
   position: absolute;
   left: 50%;
@@ -2016,6 +2016,9 @@ body > .pk-layer {
   display: flex;
   gap: 10px;
 }
+.pk-alert-btns.pk-stack {
+  flex-direction: column;
+}
 .pk-alert-btn {
   flex: 1;
   height: 48px;
@@ -2024,6 +2027,9 @@ body > .pk-layer {
   font-weight: 600;
   font-size: 17px;
   color: var(--fg);
+}
+.pk-stack > .pk-alert-btn {
+  flex: none;
 }
 .pk-alert-btn.pk-red {
   background: var(--danger);
@@ -3663,7 +3669,7 @@ body > .pk-layer {
 
 </script>
 <script id="pk-js">
-/* Parts kit 1.2.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
+/* Parts kit 1.3.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
    Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
 
    Use: load parts-kit.css and this file, then your settings file:  Parts.settings({ app: 'My app', … })
@@ -3676,7 +3682,7 @@ body > .pk-layer {
 (function () {
   'use strict';
   if (window.Parts && window.Parts.version) return;
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
   const doc = document;
   const html = doc.documentElement;
 
@@ -5715,13 +5721,29 @@ body > .pk-layer {
   }
 
   /* (48) Parts.confirm({ title, message, action: 'Delete', red: true, cancel: 'Cancel', name, style }) → Promise<boolean>.
+     With actions (1.3): Parts.confirm({ title, message, actions: [{ label, red, value }], cancel }) → Promise of the chosen
+     action's value (its label if it has none), or null for Cancel. Three or more buttons stack, Cancel last.
      An alert (confirm 'alert', D08: the app's own, never window.confirm) or a sheet. */
   function confirmBox(o) {
     o = o || {};
-    const red = o.red !== false;
+    const many = Array.isArray(o.actions) && o.actions.length > 0;
+    const acts = many
+      ? o.actions.map((a) => ({
+          label: String((a && a.label) || 'OK'),
+          red: !!(a && a.red),
+          value: a && a.value !== undefined ? a.value : String((a && a.label) || 'OK'),
+        }))
+      : [{ label: o.action || 'OK', red: o.red !== false, value: true }];
+    const none = many ? null : false;
+    const result = (i) => (typeof i === 'number' && i >= 0 && i < acts.length ? acts[i].value : none);
+    const key = (i) => (many ? String(i) : 'yes');
+    const btn = (a, i) =>
+      '<button class="pk-alert-btn ' + (a.red ? 'pk-red' : 'pk-blue') + '" data-a="' + key(i) + '" data-name="Action: ' + esc(a.label) + '">' + esc(a.label) + '</button>';
+    const cancelBtn = '<button class="pk-alert-btn" data-a="no" data-name="Cancel">' + esc(o.cancel || 'Cancel') + '</button>';
+    const index = (b) => (b.dataset.a === 'no' ? -1 : b.dataset.a === 'yes' ? 0 : +b.dataset.a);
     return new Promise((resolve) => {
       if (S.confirm === 'sheet') {
-        let yes = false;
+        let picked = -1;
         const sh = sheet({
           key: o.key,
           name: o.name || 'Confirmation',
@@ -5729,14 +5751,14 @@ body > .pk-layer {
           title: o.title || '',
           html:
             (o.message ? '<p class="pk-alert-text" style="text-align:center">' + esc(o.message) + '</p>' : '') +
-            '<div style="display:flex;flex-direction:column;gap:10px"><button class="pk-alert-btn ' + (red ? 'pk-red' : 'pk-blue') + '" data-a="yes">' + esc(o.action || 'OK') + '</button><button class="pk-alert-btn" data-a="no">' + esc(o.cancel || 'Cancel') + '</button></div>',
-          onClose: () => resolve(yes),
+            '<div style="display:flex;flex-direction:column;gap:10px">' + acts.map(btn).join('') + cancelBtn + '</div>',
+          onClose: () => resolve(result(picked)),
         });
         sh.body.addEventListener('click', (ev) => {
           const b = ev.target.closest('[data-a]');
           if (!b) return;
-          yes = b.dataset.a === 'yes';
-          sh.close(yes ? 'yes' : 'no');
+          picked = index(b);
+          sh.close(picked < 0 ? 'no' : 'yes');
         });
         return;
       }
@@ -5744,16 +5766,19 @@ body > .pk-layer {
       g.className = 'pk-alert pk-glass pk-strong';
       named(g, o, 'Alert');
       g.setAttribute('role', 'alertdialog');
+      const stack = acts.length + 1 >= 3;
       g.innerHTML =
         '<p class="pk-alert-title">' + esc(o.title || '') + '</p>' + (o.message ? '<p class="pk-alert-text">' + esc(o.message) + '</p>' : '') +
-        '<div class="pk-alert-btns"><button class="pk-alert-btn" data-a="no" data-name="Cancel">' + esc(o.cancel || 'Cancel') + '</button><button class="pk-alert-btn ' + (red ? 'pk-red' : 'pk-blue') + '" data-a="yes" data-name="Action: ' + esc(o.action || 'OK') + '">' + esc(o.action || 'OK') + '</button></div>';
+        (stack
+          ? '<div class="pk-alert-btns pk-stack">' + acts.map(btn).join('') + cancelBtn + '</div>'
+          : '<div class="pk-alert-btns">' + cancelBtn + btn(acts[0], 0) + '</div>');
       const dim = dimLayer('pk-soft');
       layer().append(g);
       void g.offsetWidth;
       g.classList.add('pk-on');
       const ctl = track({
         el: g,
-        close(yes) {
+        close(i) {
           if (ctl.closed) return;
           ctl.closed = true;
           untrack(ctl);
@@ -5761,12 +5786,12 @@ body > .pk-layer {
           g.classList.remove('pk-on');
           dropDim(dim, dur('--dur-leave', g));
           after(() => g.remove(), motion.reduced() ? dur('--dur-reduced', g) : dur('--dur-leave', g));
-          resolve(!!yes);
+          resolve(result(i));
         },
       });
       g.addEventListener('click', (ev) => {
         const b = ev.target.closest('[data-a]');
-        if (b) ctl.close(b.dataset.a === 'yes');
+        if (b) ctl.close(index(b));
       });
     });
   }
@@ -6027,7 +6052,9 @@ H += part(47, 'Action sheet', 'e', 'A list of actions from the bottom, with Canc
   <div class="gal-row">${openBtn('o-as-slow', 'Show slow actions')}</div>
   <div class="pk-list" style="margin-top:10px">${swRow('Own timing (900 ms)', true).replace('data-name="Switch: Own timing (900 ms)"', 'id="slowSw" data-name="Switch: Own timing"')}</div>`);
 H += part(48, 'Alert', 'e', 'A centred box with two capsule buttons. Appears over 250 ms, scaling from 1.1 (<code>confirm</code> alert, D08; or a sheet). Never the browser\'s own confirm. <code>Parts.confirm({…})</code>',
-  `<div class="gal-row">${openBtn('o-dlg', 'Delete…')}</div>`);
+  `<div class="gal-row">${openBtn('o-dlg', 'Delete…')}</div>
+  <p class="gal-pv" style="margin-top:12px"><b>More than one action (new in 1.3).</b> Pass <code>actions: [{ label, red, value }]</code> and the alert shows each one, with Cancel last. Three or more buttons stack, as iOS alerts do. It gives back the chosen action's value, or nothing if Cancel is tapped.</p>
+  <div class="gal-row">${openBtn('o-dlg3', 'Reset all…')}</div>`);
 H += part(49, 'Toast', 'e', 'Drops in from the top over 500 ms, stays 3 s (<code>timing.toast</code>), then leaves upward over 350 ms. Undo where something can be undone. <code>Parts.toast(text, {undo})</code>',
   `<div class="gal-row">${openBtn('o-toast', 'Show toast')}</div>`);
 
@@ -6103,6 +6130,10 @@ $('#o-as').addEventListener('click', () => Parts.choices({ title: 'What would yo
 $('#o-as-slow').addEventListener('click', () => Parts.choices({ title: 'This action sheet has its own timing', name: 'Slow action sheet', style: $('#slowSw').classList.contains('on') ? '--dur-rise: 900ms' : '',
   actions: [{ label: 'Duplicate' }, { label: 'Move to folder' }] }));
 $('#o-dlg').addEventListener('click', () => Parts.confirm({ title: 'Delete “Weekly plan”?', message: "This can't be undone.", action: 'Delete' }).then(yes => { if (yes) Parts.toast('Deleted “Weekly plan”'); }));
+$('#o-dlg3').addEventListener('click', () => Parts.confirm({
+  title: 'Reset all data?', message: 'Everything saved on this device will be deleted. Back up first to keep a copy.',
+  actions: [{ label: 'Back up first', value: 'backup' }, { label: 'Delete everything', red: true, value: 'delete' }],
+}).then(v => Parts.toast(v === 'backup' ? 'Backing up first' : v === 'delete' ? 'Deleted everything' : 'Kept everything')));
 $('#o-toast').addEventListener('click', () => Parts.toast('Saved to Library', { undo: () => Parts.toast('Undone') }));
 
 

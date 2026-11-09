@@ -13,6 +13,8 @@ Usage: python tools/check.py [shots-folder]        (needs Python and Playwright:
    Motion or at speed 0; bad overrides are refused and left as they were; opening a sheet and a menu stays quick.
    Keyboard (1.2): with a faked smaller visible area, an open search field rides --pk-kb-gap above the keyboard and
    drops back when it grows (in 4, keyboard_lift).
+   Alert actions (1.3): more than one action stacks with Cancel last, gives back the chosen value or null, works as a
+   sheet, and calls without actions behave as 1.2.0 (in 4, alert_actions).
 4. Every behaviour, and every setting both ways (BEHAVIOURS below).
 Prints each problem and exits 1 if there are any.
 """
@@ -747,6 +749,117 @@ def overlays(page):
 
 
 @behaviour
+def alert_actions(page):
+    """1.3: an alert with more than one action. Stacked with Cancel last, gives back the chosen value or null, works
+    as a sheet too, looks right in light, dark and Reduce Motion; calls without actions behave exactly as 1.2.0."""
+    page.evaluate("Parts.motion.setSpeed(0)")
+    page.evaluate("window.ask = (o) => { window.got = 'pending'; Parts.confirm(o).then(v => { window.got = v; }); }; 0")
+    three = {"title": "Reset all data?", "message": "Gone for good.", "actions": [
+        {"label": "Back up first", "value": "backup"}, {"label": "Delete everything", "red": True, "value": "delete"}]}
+
+    def answer(fn):
+        page.wait_for_timeout(50)
+        fn()
+        page.wait_for_function("window.got !== 'pending'", timeout=3000)
+        v = page.evaluate("window.got")
+        page.wait_for_timeout(450)
+        return v
+
+    def layout():
+        return page.evaluate("""() => {
+          const g = document.querySelector('.pk-alert:not(.pk-leaving)'); if (!g) return null;
+          const row = g.querySelector('.pk-alert-btns'), bs = [...row.querySelectorAll('.pk-alert-btn')], gr = g.getBoundingClientRect();
+          return { stack: row.classList.contains('pk-stack'), labels: bs.map(b => b.textContent), keys: bs.map(b => b.dataset.a),
+            names: bs.map(b => b.dataset.name), cls: bs.map(b => b.classList.contains('pk-red') ? 'red' : b.classList.contains('pk-blue') ? 'blue' : 'plain'),
+            r: bs.map(b => { const r = b.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }), box: [gr.left, gr.top, gr.right, gr.bottom] };
+        }""")
+
+    # three buttons: stacked, actions in order, Cancel last
+    page.evaluate("o => ask(o)", three)
+    L = layout()
+    ok(L and L["stack"] and L["labels"] == ["Back up first", "Delete everything", "Cancel"], f"48 (1.3): three buttons stack, actions in order, Cancel last ({L and L['labels']})")
+    if L:
+        tops = [r[1] for r in L["r"]]
+        ok(all(tops[i + 1] >= tops[i] + L["r"][i][3] for i in range(2)), f"48 (1.3): the stacked buttons don't overlap ({tops})")
+        ok(len({round(r[0]) for r in L["r"]}) == 1 and len({round(r[2]) for r in L["r"]}) == 1, "48 (1.3): the stacked buttons line up at one width")
+        ok(all(abs(r[3] - 48) < 1 for r in L["r"]), "48 (1.3): each stacked button keeps the 48 pt height")
+        ok(L["r"][2][1] + L["r"][2][3] <= L["box"][3] and L["r"][0][1] >= L["box"][1], "48 (1.3): every button sits inside the alert")
+        ok(L["cls"] == ["blue", "red", "plain"], f"48 (1.3): red only where asked, Cancel plain ({L['cls']})")
+        ok(L["names"] == ["Action: Back up first", "Action: Delete everything", "Cancel"], "48 (1.3): each button is named")
+    ok(answer(lambda: page.click(".pk-alert [data-a='1']")) == "delete", "48 (1.3): the second action gives back its value")
+    page.evaluate("o => ask(o)", three)
+    ok(answer(lambda: page.click(".pk-alert [data-a='0']")) == "backup", "48 (1.3): the first action gives back its value")
+    page.evaluate("o => ask(o)", three)
+    ok(answer(lambda: page.click(".pk-alert [data-a='no']")) is None, "48 (1.3): Cancel gives back null")
+    page.evaluate("o => ask(o)", three)
+    ok(answer(lambda: page.keyboard.press("Escape")) is None, "48 (1.3): Escape gives back null")
+    page.evaluate("o => ask(o)", three)
+    ok(answer(lambda: page.evaluate("Parts.closeAll()")) is None, "48 (1.3): closeAll gives back null")
+    ok(gone(page, ".pk-alert") and gone(page, ".pk-dim"), "48 (1.3): nothing is left behind after it closes")
+    page.evaluate("ask({ title: 'Pick', actions: [{ label: 'Keep' }, { label: 'Move' }, { label: 'Copy' }], cancel: 'Not now' })")
+    L = layout()
+    ok(L and L["labels"] == ["Keep", "Move", "Copy", "Not now"], "48 (1.3): four buttons stack, with the cancel label passed")
+    ok(answer(lambda: page.click(".pk-alert [data-a='2']")) == "Copy", "48 (1.3): an action with no value gives back its label")
+    # one action in actions: two buttons side by side, value or null
+    page.evaluate("ask({ title: 'Move?', actions: [{ label: 'Move', value: 7 }] })")
+    L = layout()
+    ok(L and not L["stack"] and L["labels"] == ["Cancel", "Move"] and abs(L["r"][0][1] - L["r"][1][1]) < 1, "48 (1.3): one action plus Cancel stays side by side")
+    ok(answer(lambda: page.click(".pk-alert [data-a='0']")) == 7, "48 (1.3): one action gives back its value")
+    page.evaluate("ask({ title: 'Move?', actions: [{ label: 'Move', value: 7 }] })")
+    ok(answer(lambda: page.click(".pk-alert [data-a='no']")) is None, "48 (1.3): Cancel with one action gives back null")
+    # without actions: exactly 1.2.0
+    page.evaluate("ask({ title: 'Delete?', action: 'Delete' })")
+    L = layout()
+    ok(L and not L["stack"] and L["keys"] == ["no", "yes"] and L["cls"] == ["plain", "red"] and L["names"] == ["Cancel", "Action: Delete"], "48: without actions the alert is as in 1.2.0 (Cancel, then a red action)")
+    ok(answer(lambda: page.click(".pk-alert [data-a='yes']")) is True, "48: without actions the action gives back true")
+    page.evaluate("ask({ title: 'Delete?', action: 'Delete' })")
+    ok(answer(lambda: page.click(".pk-alert [data-a='no']")) is False, "48: without actions Cancel gives back false")
+    page.evaluate("ask({ title: 'Delete?' })")
+    ok(answer(lambda: page.keyboard.press("Escape")) is False, "48: without actions Escape gives back false")
+    page.evaluate("ask({ title: 'Save?', action: 'Save', red: false })")
+    L = layout()
+    ok(L and L["cls"] == ["plain", "blue"] and L["labels"] == ["Cancel", "Save"], "48: red: false still gives a blue action")
+    answer(lambda: page.evaluate("Parts.closeAll()"))
+    # as a sheet (D08)
+    page.evaluate("Kit.set('Confirm (D08)', 1)")
+    page.evaluate("o => ask(o)", three)
+    page.wait_for_timeout(100)
+    labels = page.evaluate("[...document.querySelectorAll('.pk-sheet:not(.pk-leaving) [data-a]')].map(b => b.textContent)")
+    ok(labels == ["Back up first", "Delete everything", "Cancel"] and not page.evaluate("!!document.querySelector('.pk-alert')"), f"D08 (1.3): as a sheet, every action then Cancel ({labels})")
+    ok(answer(lambda: page.click(".pk-sheet [data-a='1']")) == "delete", "D08 (1.3): the sheet gives back the chosen value")
+    page.evaluate("o => ask(o)", three)
+    ok(answer(lambda: page.evaluate("Parts.closeAll()")) is None, "D08 (1.3): closing the sheet gives back null")
+    page.evaluate("ask({ title: 'Delete?', action: 'Delete' })")
+    ok(answer(lambda: page.click(".pk-sheet [data-a='yes']")) is True, "D08: without actions the sheet gives back true")
+    page.evaluate("ask({ title: 'Delete?', action: 'Delete' })")
+    ok(answer(lambda: page.evaluate("Parts.closeAll()")) is False, "D08: without actions closing the sheet gives back false")
+    page.evaluate("Kit.set('Confirm (D08)', 0)")
+    # the gallery's three-button alert in light, dark and Reduce Motion, at normal speed
+    scroll_to(page, "#p48")
+    page.evaluate("Parts.motion.setSpeed(1)")
+    for look in (0, 1):
+        for reduced in (0, 1):
+            label = f"48 (1.3) · {'dark' if look else 'light'}{' · Reduce Motion' if reduced else ''}"
+            page.evaluate(f"Kit.set('Look', {look})")
+            page.evaluate(f"Kit.set('Motion', {2 if reduced else 0})")
+            page.wait_for_timeout(150)
+            page.click("#o-dlg3")
+            page.wait_for_timeout(450)
+            st = page.evaluate("""() => { const g = document.querySelector('.pk-alert.pk-on'); if (!g) return null; const c = getComputedStyle(g);
+              const bs = [...g.querySelectorAll('.pk-alert-btn')].map(b => getComputedStyle(b));
+              return { op: +c.opacity, scale: c.scale, n: bs.length, bg: bs.map(b => b.backgroundColor), fg: bs.map(b => b.color) }; }""")
+            ok(st and st["op"] > 0.99 and st["n"] == 3, f"{label}: the gallery's alert opens with three buttons")
+            if st:
+                ok(st["scale"] == ("none" if reduced else "1"), f"{label}: {'no scaling, only a fade' if reduced else 'settles at full size'} ({st['scale']})")
+                ok(len(set(st["bg"])) == 3 and all(st["bg"][i] != st["fg"][i] for i in range(3)), f"{label}: three distinct buttons with readable text")
+            page.locator(".kit-screen").screenshot(path=str(SHOTS / f"alert-actions-{'dark' if look else 'light'}{'-reduced' if reduced else ''}.png"))
+            page.click(".pk-alert [data-a='1']")
+            ok(gone(page, ".pk-alert") and "Deleted everything" in page.inner_text(".pk-toast"), f"{label}: Delete everything closes it and the gallery gets 'delete'")
+            page.evaluate("Parts.closeAll()")
+    page.evaluate("Kit.set('Look', 0)"); page.evaluate("Kit.set('Motion', 0)")
+
+
+@behaviour
 def pinned(page):
     page.evaluate("Parts.motion.setSpeed(1)")
     # 45 submenus (D11): on for this menu in the gallery
@@ -869,9 +982,14 @@ def settings_both_ways(page):
     page.evaluate("Kit.set('Motion', 0)")
 
 
+SHOTS = KIT / "shots"
+
+
 def main():
+    global SHOTS
     shots = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else KIT / "shots").resolve()
     shots.mkdir(parents=True, exist_ok=True)
+    SHOTS = shots
     static()
     subprocess.run([sys.executable, str(KIT / "tools/bundle.py")], check=True, stdout=subprocess.DEVNULL)
     srv = serve(KIT)

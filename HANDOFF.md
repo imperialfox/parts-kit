@@ -1,3 +1,65 @@
+# Handoff · Parts kit 1.3 · 5 Nov 2026
+
+> **Render:** Approved by Ivan on 5 Nov 2026, 08:04 ("I also give you render permissions", the same instruction as Vocal Sessions Q50 to Q56), for the scope in the Singing project's `claude/ui_consistency_fixes_blueprint.md` › Parts kit 1.3.0.
+> **Build:** Given by Ivan in the same instruction; started on 9 Nov 2026, 09:00 ("Build 1.3.0"), in a fresh chat. Built by Claude. Released as **1.3.0** on 9 Nov 2026.
+> **The rule for every kit version:** Render approves a named scope only; nothing is built, committed or released until Ivan separately says Build.
+
+**For:** Claude · **Job:** build · **Builder:** Claude
+**Repo:** `imperialfox/parts-kit`, from 1.2.0 (`2776729`) to 1.3.0. No Q number: it belongs to no app.
+**Needed by:** Vocal Sessions Q56 · Settings: Reset All Alert (Reset all data becomes an alert with Back up first, Delete everything and Cancel, D23).
+
+**Goal:** the kit's alert (part 48) can show more than one action, as iOS alerts do.
+
+## Agreed
+
+1. `Parts.confirm({ …, actions: [{ label, red, value }] })` resolves to the chosen action's value, or `null` for Cancel.
+2. With no `actions` it behaves exactly as 1.2.0 (true or false).
+3. Three or more buttons stack.
+4. The Parts gallery shows a three-button alert.
+5. A minor version with its changelog, checksums and this handoff.
+
+## Out of scope
+
+Any other part.
+
+## Done when
+
+- The gallery's three-button alert works in light, dark and Reduce Motion.
+- 1.2.0 calls behave the same.
+- `tools/check.py` passes; checksums updated.
+
+**Effort guess:** light.
+
+## Debrief · 9 Nov 2026
+
+**What changed**
+- `parts-kit.js`: `confirmBox` builds its buttons from a list. Without `actions` the list is the one 1.2.0 action (same markup, same `data-a="yes"` / `"no"`, same names, true or false). With `actions`, each button is `data-a="0"`, `"1"` and so on, named `Action: <label>`, and the alert answers with that action's value. Cancel, Escape and `Parts.closeAll()` answer `null`. The sheet version (`confirm: 'sheet'`) uses the same buttons and answers.
+- `parts-kit.css`: `.pk-alert-btns.pk-stack` (a column) and `.pk-stack > .pk-alert-btn { flex: none }` so stacked buttons keep 48 pt. No new values; the value rule still passes.
+- `demo/index.html`: part 48 has a "Reset all…" button with Back up first, Delete everything (red) and Cancel; a toast says what came back.
+- README (part 48 row, "Alerts with more than one action"), CHANGELOG, SHA256SUMS, `tools/check.py`.
+
+**How it was checked** (`python tools/check.py`)
+- One full run: everything 1.2.0 checked passed. Its only failure was the new gallery text showing the word "null" on screen, which the screen check forbids; the text now says "nothing if Cancel is tapped", and the looks pass and the alert checks were run again, all passing.
+- New checks (`alert_actions`): three and four buttons stack in order with Cancel last, don't overlap, line up at one width, keep 48 pt and sit inside the alert; red only where asked; each button named; each action, Cancel, Escape and closing give the right answer; an action with no value gives its label; one action plus Cancel stays side by side; the sheet version; 1.2.0 calls (true, false, Escape false, `red: false` blue); the gallery's alert in light, dark and Reduce Motion (full size, or no scaling under Reduce Motion), with screenshots looked at.
+
+**Decided along the way** (inside the scope; each is easy to change)
+1. **Colours:** `red: true` is red, any other action is the accent colour, Cancel stays plain. This follows 1.2.0, where a non-red action was already the accent colour.
+2. **A missing `value` gives back the label,** the same as `Parts.choices` does.
+3. **One action in `actions`** stays side by side with Cancel (two buttons), answering its value or `null`.
+4. **Order when stacked:** the actions as given, top to bottom, then Cancel at the bottom, as iOS alerts do.
+
+**What's left**
+- Q56 · Settings: Reset All Alert can now pin 1.3.0.
+- Parts kit 1.4.0 (the Liquid Glass tab bar bubble) is Rendered and builds on top of this; it waits for Ivan's Build.
+- **One thing for Ivan:** on GitHub, open the repo › Releases › *Draft a new release*, type the tag `v1.3.0` (target `main`), title "Parts kit 1.3.0", paste the 1.3.0 part of `CHANGELOG.md`, attach `parts-kit.css`, `parts-kit.js` and `SHA256SUMS.txt`, and publish.
+
+**For Ivan, on your phone** (the Parts gallery › 48 Alert › Reset all…)
+1. Do the three stacked buttons feel right to tap, with Cancel at the bottom?
+2. Tap each one: does the toast say Backing up first, Deleted everything, or Kept everything?
+3. With Reduce Motion on, does it only fade?
+
+---
+
 # Handoff · Parts kit 1.2 · 4 Nov 2026
 
 > **Render:** Approved by Ivan on 4 Nov 2026, 18:36 ("render", all three pieces of the Singing project's `claude/vs_motion_and_kit_bars_blueprint.md`), for piece A as written, with every *Default if unanswered* taken.

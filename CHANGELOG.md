@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.0 · 9 Nov 2026
+
+*An alert can offer more than one action*
+
+**Alert (part 48)**
+- `Parts.confirm({ …, actions: [{ label, red, value }] })` shows every action. It gives back the chosen action's value (its label if it has none), or `null` for Cancel, Escape or `Parts.closeAll()`.
+- Three or more buttons stack in the order given, with Cancel at the bottom, as iOS alerts do. One action plus Cancel stays side by side.
+- `red: true` makes an action red; other actions use the accent colour. Each button is named (`Action: <label>`, `Cancel`).
+- With `confirm: 'sheet'` the same actions show in a sheet, Cancel last, with the same answers.
+- Without `actions` it behaves exactly as 1.2.0: one action, `true` or `false`.
+
+**Also**
+- README: the part 48 row and an "Alerts with more than one action" section.
+- The Parts gallery's part 48 has a three-button alert (Reset all…).
+- `tools/check.py`: stacking, order, sizes and names; every answer (each action, Cancel, Escape, closing, a missing value); one action side by side; the sheet version; 1.2.0 calls unchanged; and the gallery's alert in light, dark and Reduce Motion.
+
 ## 1.2.0 · 4 Nov 2026
 
 *The search field stays in view above the iPhone keyboard*

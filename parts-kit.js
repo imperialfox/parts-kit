@@ -1,4 +1,4 @@
-/* Parts kit 1.2.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
+/* Parts kit 1.3.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
    Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
 
    Use: load parts-kit.css and this file, then your settings file:  Parts.settings({ app: 'My app', … })
@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   if (window.Parts && window.Parts.version) return;
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
   const doc = document;
   const html = doc.documentElement;
 
@@ -2050,13 +2050,29 @@
   }
 
   /* (48) Parts.confirm({ title, message, action: 'Delete', red: true, cancel: 'Cancel', name, style }) → Promise<boolean>.
+     With actions (1.3): Parts.confirm({ title, message, actions: [{ label, red, value }], cancel }) → Promise of the chosen
+     action's value (its label if it has none), or null for Cancel. Three or more buttons stack, Cancel last.
      An alert (confirm 'alert', D08: the app's own, never window.confirm) or a sheet. */
   function confirmBox(o) {
     o = o || {};
-    const red = o.red !== false;
+    const many = Array.isArray(o.actions) && o.actions.length > 0;
+    const acts = many
+      ? o.actions.map((a) => ({
+          label: String((a && a.label) || 'OK'),
+          red: !!(a && a.red),
+          value: a && a.value !== undefined ? a.value : String((a && a.label) || 'OK'),
+        }))
+      : [{ label: o.action || 'OK', red: o.red !== false, value: true }];
+    const none = many ? null : false;
+    const result = (i) => (typeof i === 'number' && i >= 0 && i < acts.length ? acts[i].value : none);
+    const key = (i) => (many ? String(i) : 'yes');
+    const btn = (a, i) =>
+      '<button class="pk-alert-btn ' + (a.red ? 'pk-red' : 'pk-blue') + '" data-a="' + key(i) + '" data-name="Action: ' + esc(a.label) + '">' + esc(a.label) + '</button>';
+    const cancelBtn = '<button class="pk-alert-btn" data-a="no" data-name="Cancel">' + esc(o.cancel || 'Cancel') + '</button>';
+    const index = (b) => (b.dataset.a === 'no' ? -1 : b.dataset.a === 'yes' ? 0 : +b.dataset.a);
     return new Promise((resolve) => {
       if (S.confirm === 'sheet') {
-        let yes = false;
+        let picked = -1;
         const sh = sheet({
           key: o.key,
           name: o.name || 'Confirmation',
@@ -2064,14 +2080,14 @@
           title: o.title || '',
           html:
             (o.message ? '<p class="pk-alert-text" style="text-align:center">' + esc(o.message) + '</p>' : '') +
-            '<div style="display:flex;flex-direction:column;gap:10px"><button class="pk-alert-btn ' + (red ? 'pk-red' : 'pk-blue') + '" data-a="yes">' + esc(o.action || 'OK') + '</button><button class="pk-alert-btn" data-a="no">' + esc(o.cancel || 'Cancel') + '</button></div>',
-          onClose: () => resolve(yes),
+            '<div style="display:flex;flex-direction:column;gap:10px">' + acts.map(btn).join('') + cancelBtn + '</div>',
+          onClose: () => resolve(result(picked)),
         });
         sh.body.addEventListener('click', (ev) => {
           const b = ev.target.closest('[data-a]');
           if (!b) return;
-          yes = b.dataset.a === 'yes';
-          sh.close(yes ? 'yes' : 'no');
+          picked = index(b);
+          sh.close(picked < 0 ? 'no' : 'yes');
         });
         return;
       }
@@ -2079,16 +2095,19 @@
       g.className = 'pk-alert pk-glass pk-strong';
       named(g, o, 'Alert');
       g.setAttribute('role', 'alertdialog');
+      const stack = acts.length + 1 >= 3;
       g.innerHTML =
         '<p class="pk-alert-title">' + esc(o.title || '') + '</p>' + (o.message ? '<p class="pk-alert-text">' + esc(o.message) + '</p>' : '') +
-        '<div class="pk-alert-btns"><button class="pk-alert-btn" data-a="no" data-name="Cancel">' + esc(o.cancel || 'Cancel') + '</button><button class="pk-alert-btn ' + (red ? 'pk-red' : 'pk-blue') + '" data-a="yes" data-name="Action: ' + esc(o.action || 'OK') + '">' + esc(o.action || 'OK') + '</button></div>';
+        (stack
+          ? '<div class="pk-alert-btns pk-stack">' + acts.map(btn).join('') + cancelBtn + '</div>'
+          : '<div class="pk-alert-btns">' + cancelBtn + btn(acts[0], 0) + '</div>');
       const dim = dimLayer('pk-soft');
       layer().append(g);
       void g.offsetWidth;
       g.classList.add('pk-on');
       const ctl = track({
         el: g,
-        close(yes) {
+        close(i) {
           if (ctl.closed) return;
           ctl.closed = true;
           untrack(ctl);
@@ -2096,12 +2115,12 @@
           g.classList.remove('pk-on');
           dropDim(dim, dur('--dur-leave', g));
           after(() => g.remove(), motion.reduced() ? dur('--dur-reduced', g) : dur('--dur-leave', g));
-          resolve(!!yes);
+          resolve(result(i));
         },
       });
       g.addEventListener('click', (ev) => {
         const b = ev.target.closest('[data-a]');
-        if (b) ctl.close(b.dataset.a === 'yes');
+        if (b) ctl.close(index(b));
       });
     });
   }

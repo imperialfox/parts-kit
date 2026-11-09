@@ -1,8 +1,8 @@
 # Parts kit
 
-![version](https://img.shields.io/badge/version-1.2.0-007aff)
+![version](https://img.shields.io/badge/version-1.3.0-007aff)
 
-**Current version:** 1.2.0 · 4 Nov 2026 · [changelog](CHANGELOG.md)
+**Current version:** 1.3.0 · 9 Nov 2026 · [changelog](CHANGELOG.md)
 
 One set of Liquid Glass parts (sheets, menus, alerts, switches, the tab bar and the rest), built once, that any web app or prototype loads with a small settings file of its own. The parts look and move like iOS 26/27, using numbers measured against real iPhones where they exist. It belongs to no app, so any app can use it.
 
@@ -156,6 +156,28 @@ New in 1.2. When the tab bar's search field (part 6) is open on an iPhone, the d
 - `pk:keyboard { lift }` fires on the dock each time the lift changes. `Parts.keyboard()` reads the visible area again now and returns the lift (for tests).
 - Pinch zoom isn't a keyboard and lifts nothing. On Android the same reading works where the browser reports the visible area this way; where it resizes the page instead, nothing needs lifting.
 
+## Alerts with more than one action
+
+New in 1.3. Pass `actions` and the alert shows each one, with Cancel last:
+
+```js
+const pick = await Parts.confirm({
+  title: 'Reset all data?',
+  message: 'Everything saved on this device will be deleted.',
+  actions: [
+    { label: 'Back up first', value: 'backup' },
+    { label: 'Delete everything', red: true, value: 'delete' },
+  ],
+  cancel: 'Cancel', // optional
+});
+// pick is 'backup', 'delete', or null for Cancel (also Escape, or Parts.closeAll())
+```
+
+- Each action is `{ label, red, value }`. `red: true` makes it red; any other action is the accent colour. An action with no `value` gives back its label.
+- One action plus Cancel sits side by side, as before. Three or more buttons stack, in the order given, with Cancel at the bottom, as iOS alerts do.
+- With `confirm: 'sheet'` the same buttons show in a sheet, Cancel last, and give back the same values.
+- Without `actions`, nothing changes from 1.2.0: `action` and `red` as before, and the answer is `true` or `false`.
+
 ## Gestures
 
 Whatever the finger lands on gets first claim: switches, sliders, segmented controls, the tab bar, swipe rows, reorder handles, fields and anything marked `data-own-gesture` beat swiping back on a pushed page and dragging a sheet. Dragging gestures follow the finger at once and settle on springs; flicks carry their speed (a sheet: 700 pt/s; a switch: 200 px/s; swiping back: 500 pt/s).
@@ -218,7 +240,7 @@ Numbers are the Parts gallery's. Every part sends `pk:` events that bubble (`pk:
 | 44 | Popover | `Parts.popover(button, html)` | Blur ramps in over 260 ms. |
 | 46 | Long-press menu | `.pk-hold`; in `pk:hold`, call `ev.detail.open(items, { onPick })` | Measured: lifts from 200 ms (×1.04), menu at 700 ms, dim 20% / 25%, closes in 170 ms. Right-click opens it at once. `Parts.contextMenu(row, items)`. |
 | 47 | Action sheet | `Parts.choices({ title, actions: [{ label, red, value }] })` → Promise of the value or `null` | `choices`. |
-| 48 | Alert | `Parts.confirm({ title, message, action, red })` → Promise of true / false | `confirm`. Never the browser's own confirm. |
+| 48 | Alert | `Parts.confirm({ title, message, action, red })` → Promise of true / false; with `actions` (1.3), the chosen action's value or `null` (see [Alerts with more than one action](#alerts-with-more-than-one-action)) | `confirm`. Never the browser's own confirm. |
 | 49 | Toast | `Parts.toast(text, { undo, ms })` | 500 ms in, 350 ms out, 3 s. One at a time. |
 
 Menu items are `{ label, icon, red, disabled, value, sub }` or `'-'` for a gap. Escape closes the newest overlay; `Parts.closeAll()` closes them all.

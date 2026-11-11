@@ -1,7 +1,7 @@
 # Handoff · Parts kit 1.4.0 · Liquid Glass tab bar bubble · 5 Nov 2026
 
 > **Render:** Approved by Ivan on 5 Nov 2026, 23:14 ("Render for both", for both pieces of the Singing project's `claude/liquid_glass_tabbar_blueprint.md`), for piece A as written, with every *Default if unanswered* taken.
-> **Build:** Given by Ivan on 11 Nov 2026, 20:34 ("Build for Parts kit 1.4.0, just do it here now"), in the same chat as reading the handoff. Built by Claude. Released as **1.4.0** on 11 Nov 2026.
+> **Build:** Given by Ivan on 11 Nov 2026, 20:34 ("Build for Parts kit 1.4.0, just do it here now"), in the same chat as reading the handoff. Built by Claude. Released as **1.4.0** on 11 Nov 2026, commit `5ad8dfe`.
 > **The rule for every kit version:** Render approves a named scope only; nothing is built, committed or released until Ivan separately says Build.
 
 **For:** Claude · **Job:** build · **Builder:** Claude
@@ -71,6 +71,8 @@ Any other part (the segmented control and switches using the lens come later), V
 **Notes**
 - Headless Chromium's software WebGL prints "GPU stall due to ReadPixels" warnings while the bubble is up. They are warnings, not errors, and the kit reads no pixels in normal frames.
 - `Parts.differences()` on the whole gallery now takes about 200 ms (it was 78), because of the Tune panel's extra elements.
+- The Parts gallery (artifact `174c215e-…`) republished on 1.4.0 as version `1794402106-eeb9`; its page id is unchanged, so notes keep their place.
+- **Build receipt:** Parts kit 1.4 · M–H → M · 79 steps · 138k written · 27.1M re-read · 1 full test run · includes earlier work (also in `BUILD_RECEIPTS.md`).
 
 **What's left**
 - Q58 · Interface: Liquid Glass Tab Bar can now pin 1.4.0.

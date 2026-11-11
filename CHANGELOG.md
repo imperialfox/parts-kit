@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.4.0 · 11 Nov 2026
+
+*The tab bar's Liquid Glass bubble*
+
+**Tab bar (part 4)**
+- Touched, a separate Liquid Glass bubble rises out of the picked tab (one tab's width plus 27 pt, 3.5 pt past the bar) and follows the finger. A tap travels to the tab; a drag lands on the nearest one. The pick, `aria-selected` and `pk:change` follow as the finger lifts.
+- Icons under the bubble turn the accent colour where it covers them, so half an icon under it is half accent. They never bend or grow. Only a 13 pt band at the rim bends what's under it (Fresnel rings, a mirrored slice, a little magnifying), with a rim light and a frosted body.
+- The bar swells while touched and stretches from an anchor across the bar from the finger. Dragging up raises its top edge while the bottom barely moves.
+- A fast drag squashes the bubble flat and wide; it bounces back taller and narrower. The width mirrors the height.
+- Drawn on one small WebGL canvas over the bar (36 pt around it), shown only while the bubble is up. The icons and labels are drawn once into a picture; each frame is one draw, and nothing that moves uses `backdrop-filter`.
+- Dark: the same shape and motion, with the dark glass colours for the frost and overhang.
+- Reduce Motion: no jiggle, swell, stretch, rise or moving anchor; it appears and travels on the short fade. Reduce transparency, or no WebGL: a CSS bubble with no bending (solid with Reduce transparency). No bubble while folded or searching.
+- The old press under the finger (the icon at ×1.15, the 12 × 8 pt swell) is replaced while the bubble is on.
+
+**Settings, values and calls**
+- `tabBar.bubble`: `on` (default `true`), `anchor`, `invert`, `icons`, `mirror`. `tabBar: { bubble: false }` gives back 1.3.0's highlight exactly.
+- Every number is a named value (`--pk-bubble-…`), plus four colours with dark values. Seven new named springs (`bubble-in`, `bubble-out`, `bubble-swell`, `bubble-unswell`, `bubble-follow`, `bubble-travel`, `bubble-snap`).
+- `Parts.differences()` lists the bubble's values, app-wide (`value --pk-bubble-…`) and on one tab bar.
+- `Parts.lens`: one shared WebGL context, for the segmented control and switches later. `Parts.bubble.hold()`, `.state()`, `.pixels()`; `pk:bubble { up }`.
+
+**Also**
+- The Parts gallery's part 4 shows the bubble, with a Tune switch: a slider for every value with − and +, Hold bubble up, the anchor markers, a frame meter, Copy values and Reset. The controls panel has a "Tab bar bubble" switch.
+- README: the part 4 row, the settings, and a "Liquid Glass bubble" section.
+- `tools/check.py`: the bubble up only while touched; one draw a frame under 2 ms, with a busy page too; half an icon half accent; landing and tap travel with the pick following; the jiggle following the drag speed with the width mirroring the height; folded, searching, Reduce Motion, Reduce transparency, no WebGL and `tabBar.bubble` off; light and dark at 402 × 874 and 820 × 1180; the bubble's values in the CSS matching the kit's numbers; its differences.
+
 ## 1.3.0 · 9 Nov 2026
 
 *An alert can offer more than one action*

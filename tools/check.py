@@ -15,6 +15,10 @@ Usage: python tools/check.py [shots-folder]        (needs Python and Playwright:
    drops back when it grows (in 4, keyboard_lift).
    Alert actions (1.3): more than one action stacks with Cancel last, gives back the chosen value or null, works as a
    sheet, and calls without actions behave as 1.2.0 (in 4, alert_actions).
+   The Liquid Glass bubble (1.4): up only while touched, one draw a frame under 2 ms (with a busy page too), half an
+   icon under it half accent, landing and tap travel with the pick following, the jiggle following the drag speed with
+   the width mirroring the height, and each fallback (folded, searching, Reduce Motion, Reduce transparency, no WebGL,
+   tabBar.bubble off), in light and dark at 402 × 874 and 820 × 1180 (in 4, bubble_*, and bubble_looks).
 4. Every behaviour, and every setting both ways (BEHAVIOURS below).
 Prints each problem and exits 1 if there are any.
 """
@@ -213,6 +217,22 @@ def differences_checks(browser, base):
       Parts.motion.setReduced(true); const red = read(); Parts.motion.setReduced(null);
       el.remove(); Parts.settings({ springs: { press: null } }); return { off, red }; }""")
     ok(r["off"] == ["0ms", 0, "0ms", 0] and r["red"] == ["0ms", 0, "0ms", 0], f"Reduce Motion and speed 0: overridden springs don't move ({r})")
+    # (1.4) the bubble's named values: app-wide and for one tab bar; tabBar.bubble: false is short for { on: false }
+    r = page.evaluate("""async () => {
+      const css = document.createElement('style'); css.textContent = ':root { --pk-bubble-width: 30px; --pk-bubble-jiggle-time: 0.4s }'; document.head.append(css);
+      const bar = document.createElement('nav'); bar.className = 'pk-tabbar'; bar.dataset.name = 'Own bar'; bar.style.cssText = '--pk-bubble-frost: 0.3'; document.body.append(bar);
+      const p = Parts.settings({ tabBar: { bubble: false } }); const on = Parts.current.tabBar.bubble.on;
+      const keys = Parts.differences().map(d => d.key);
+      css.remove(); bar.remove(); Parts.settings({ tabBar: { bubble: true } });
+      const bad = [Parts.settings({ tabBar: { bubble: { anchor: 'middle' } } }).length, Parts.settings({ tabBar: { bubble: 'yes' } }).length, Parts.settings({ tabBar: { bubble: { wobble: 1 } } }).length];
+      const vals = Parts.bubble.values().map(v => [v.name, v.kit, parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v.name))]).filter(v => Math.abs(v[1] - (v[2] * (/s$/.test(getComputedStyle(document.documentElement).getPropertyValue(v.name).trim()) && !/ms$/.test(getComputedStyle(document.documentElement).getPropertyValue(v.name).trim()) ? 1000 : 1))) > 1e-9);
+      return { p, on, keys, after: Parts.differences().map(d => d.key), bad, vals, cur: Parts.current.tabBar.bubble }; }""")
+    ok(r["p"] == [] and r["on"] is False, f"tabBar.bubble: false turns the bubble off ({r['p']})")
+    ok(sorted(r["keys"]) == sorted(["setting tabBar.bubble.on", "value --pk-bubble-width", "element Own bar › --pk-bubble-frost"]),
+       f"differences: the bubble's values, app-wide and for one bar, and its setting ({r['keys']})")
+    ok(r["after"] == [] and r["cur"] == {"on": True, "anchor": "follow", "invert": True, "icons": "row", "mirror": True}, f"the bubble's settings and values go back to the kit's ({r['after']}, {r['cur']})")
+    ok(r["bad"] == [1, 1, 1], f"a wrong bubble setting is refused ({r['bad']})")
+    ok(r["vals"] == [], f"every bubble value in parts-kit.css matches the kit's own number ({r['vals'][:3]})")
     # the Vocal Sessions sample: motion 'kit' and an empty springs line
     sample = (KIT / "samples/vocal-sessions.settings.js").read_text(encoding="utf-8")
     ok(re.search(r"motion: 'kit', // D18", sample) and re.search(r"springs: \{\},", sample), "the Vocal Sessions sample says motion: 'kit' (D18) and has an empty springs line")
@@ -982,6 +1002,327 @@ def settings_both_ways(page):
     page.evaluate("Kit.set('Motion', 0)")
 
 
+# ------------------------------------------------------------------------------------------------ 4b. the bubble (1.4)
+BAR4 = "document.querySelector('#p4 .pk-tabbar')"
+
+
+def bstate(page, bar=BAR4):
+    return page.evaluate(f"Parts.bubble.state({bar})")
+
+
+def tab_center(page, sel, i):
+    b = page.locator(sel + " .pk-tab").nth(i).bounding_box()
+    return b["x"] + b["width"] / 2, b["y"] + b["height"] / 2
+
+
+def settle(page, bar=BAR4, ms=2500):
+    page.wait_for_function(f"!Parts.bubble.state({bar}).up", timeout=ms)
+
+
+@behaviour
+def bubble_up_only_while_touched(page):
+    page.evaluate("Parts.motion.setSpeed(1)")
+    scroll_to(page, "#p4")
+    ok(page.evaluate("Parts.lens.ok"), "bubble: WebGL started once for the page's tab bars")
+    rest = page.evaluate(f"(() => {{ const c = Parts.lens.canvas; return {{ shown: !!c.isConnected && getComputedStyle(c).visibility === 'visible', cls: {BAR4}.classList.contains('pk-bubbling') }}; }})()")
+    ok(rest == {"shown": False, "cls": False}, f"bubble: at rest the canvas is hidden and the tabs are the real ones ({rest})")
+    x, y = tab_center(page, "#p4", 0)
+    page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(700)
+    st = bstate(page)
+    up = page.evaluate(f"(() => {{ const c = Parts.lens.canvas, b = {BAR4}; return {{ vis: getComputedStyle(c).visibility, cls: b.classList.contains('pk-bubbling'), tabs: getComputedStyle(b.querySelector('.pk-tab')).visibility, here: c.parentElement === b.parentElement || c.parentElement === b.offsetParent }}; }})()")
+    ok(st["up"] and st["mode"] == "webgl" and st["lift"] > 0.95, f"bubble: touched, it rises on WebGL ({st.get('mode')}, lift {st.get('lift')})")
+    ok(up == {"vis": "visible", "cls": True, "tabs": "hidden", "here": True}, f"bubble: the canvas shows over this bar and draws its tabs ({up})")
+    w = st["bubble"]["w"] - page.evaluate(f"{BAR4}.querySelector('.pk-tab').offsetWidth")
+    ok(abs(w - 27) < 1.5, f"bubble: one tab's width plus 27 pt ({w:.1f})")
+    ok(st["bar"]["sx"] > 1.04 and st["swell"] > 0.9, f"bubble: the bar swells while touched ({st['bar']})")
+    page.mouse.up()
+    settle(page)
+    after = page.evaluate(f"(() => {{ const c = Parts.lens.canvas, b = {BAR4}; return {{ vis: getComputedStyle(c).visibility, cls: b.classList.contains('pk-bubbling'), tf: b.style.transform, tabs: getComputedStyle(b.querySelector('.pk-tab')).visibility }}; }})()")
+    ok(after == {"vis": "hidden", "cls": False, "tf": "", "tabs": "visible"}, f"bubble: let go, it settles and the canvas hides again ({after})")
+    ok(page.evaluate("document.querySelectorAll('.pk-lens').length") == 1, "bubble: one canvas for the whole page")
+
+
+@behaviour
+def bubble_cost(page):
+    page.evaluate("Parts.motion.setSpeed(1)")
+    scroll_to(page, "#p4")
+    x0, y = tab_center(page, "#p4", 0); x3, _ = tab_center(page, "#p4", 3)
+    res = {}
+    for busy in (False, True):
+        if busy:
+            page.evaluate("window.__busy = true; (function spin() { if (!window.__busy) return; const e = performance.now() + 8; while (performance.now() < e) {} requestAnimationFrame(spin); })(); 0")
+        page.evaluate("Parts.lens.stats({ reset: true })")
+        page.mouse.move(x0, y); page.mouse.down()
+        for k in range(3):
+            drag(page, x0, y, x3, y, steps=14, release=False)
+            drag(page, x3, y, x0, y, steps=14, release=False)
+        page.mouse.up(); settle(page)
+        res[busy] = page.evaluate("Parts.lens.stats()")
+        page.evaluate("window.__busy = false; 0")
+    for busy, r in res.items():
+        label = "with a busy page" if busy else "alone"
+        print(f"  bubble cost {label}: {r['frames']} frames, {r['avg']:.2f} ms average, {r['max']:.2f} ms longest")
+        ok(r["frames"] > 20 and r["draws"] == r["frames"] and r["worst"] == 1, f"bubble: one draw a frame {label} ({r})")
+        ok(r["avg"] < 2, f"bubble: its script costs under 2 ms a frame {label} ({r['avg']} ms)")
+
+
+@behaviour
+def bubble_half_accent(page):
+    page.evaluate("Parts.motion.setSpeed(0)")
+    scroll_to(page, "#p4")
+    # the recolour on its own: with the rim's bending off on this bar, the split is exactly at the bubble's edge
+    page.evaluate(f"{BAR4}.style.cssText += ';--pk-bubble-band: 0px; --pk-bubble-strength: 0px'; 0")
+    bar = page.evaluate(f"(() => {{ const b = {BAR4}, t = b.querySelectorAll('.pk-tab'); return {{ tw: t[0].offsetWidth, s2: t[2].offsetLeft + t[2].offsetWidth / 2, x: b.getBoundingClientRect().left, s: b.getBoundingClientRect().width / b.offsetWidth }}; }})()")
+    x, y = tab_center(page, "#p4", 1)
+    page.mouse.move(x, y); page.mouse.down()
+    # the bubble's right edge on the middle of tab 3's icon
+    hw = (bar["tw"] + 27) / 2
+    tx = bar["x"] + (bar["s2"] - hw) * bar["s"]
+    drag(page, x, y, tx, y, steps=6, release=False)
+    page.wait_for_timeout(120)
+    st = bstate(page)
+    bb = st["bubble"]
+    left, top = bar["s2"] - bar["tw"] / 2, 6
+    px = page.evaluate(f"Parts.bubble.pixels({BAR4}, {left}, {top}, {bar['tw']}, 34)")
+
+    def edge(x, y):  # how far outside the bubble's capsule a point is (negative inside)
+        hw, hh = bb["w"] / 2, bb["h"] / 2
+        r = min(hw, hh)
+        qx, qy = abs(x - bb["x"]) - hw + r, abs(y - bb["y"]) - hh + r
+        return (max(qx, 0) ** 2 + max(qy, 0) ** 2) ** 0.5 + min(max(qx, qy), 0) - r
+    acc_l = acc_r = dark_l = dark_r = 0
+    for j, row in enumerate(px):
+        for i, (r, g, b, a) in enumerate(row):
+            xx, yy = left + i + 0.5, top + j + 0.5
+            e = edge(xx, yy)
+            if a < 140 or abs(e) < 2:
+                continue
+            accent = b > 150 and b > r + 70
+            dark = r < 90 and g < 90 and b < 90
+            if e < 0:
+                acc_l += accent; dark_l += dark
+            else:
+                acc_r += accent; dark_r += dark
+    page.mouse.up()
+    print(f"  half an icon: accent {acc_l} / {acc_r}, normal {dark_l} / {dark_r} (inside / outside the bubble)")
+    ok(acc_l > 15 and dark_r > 15, f"bubble: the part of the icon under the bubble is accent and the rest normal ({acc_l}, {dark_r})")
+    ok(acc_r <= max(2, acc_l // 20) and dark_l <= max(2, dark_r // 20), f"bubble: no accent outside it, no normal colour inside it ({acc_r}, {dark_l})")
+
+
+@behaviour
+def bubble_landing(page):
+    page.evaluate("Parts.motion.setSpeed(1)")
+    scroll_to(page, "#p4")
+    events = "window.__ch = []; document.querySelector('#p4 .pk-tabbar').addEventListener('pk:change', e => window.__ch.push(e.detail.index)); 0"
+    page.evaluate(events)
+    # a tap on another tab: the bubble travels there, and the pick follows
+    x, y = tab_center(page, "#p4", 3)
+    page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(16); page.mouse.up()
+    sel = page.evaluate(f"[...{BAR4}.querySelectorAll('.pk-tab')].map(t => t.getAttribute('aria-selected'))")
+    page.wait_for_timeout(60)
+    mid = bstate(page)
+    page.wait_for_timeout(500)
+    end = bstate(page)
+    slots = end["slots"]
+    ok(sel == ["false", "false", "false", "true"], f"bubble: a tap picks the tab at once, with aria-selected ({sel})")
+    ok(slots[0] + 10 < mid["x"] < slots[3] - 5, f"bubble: a tap travels from the picked tab to the tapped one ({mid['x']:.1f} on the way to {slots[3]:.1f})")
+    ok(abs(end["x"] - slots[3]) < 1.5, f"bubble: it lands on the tapped tab ({end['x']:.1f})")
+    settle(page)
+    # a drag let go between tabs lands on the nearest one
+    x0, y = tab_center(page, "#p4", 3); x1, _ = tab_center(page, "#p4", 1); x2, _ = tab_center(page, "#p4", 2)
+    drag(page, x0, y, x1 + (x2 - x1) * 0.3, y, steps=12)
+    page.wait_for_timeout(600)
+    end = bstate(page)
+    sel = page.evaluate(f"[...{BAR4}.querySelectorAll('.pk-tab')].map(t => t.getAttribute('aria-selected'))")
+    ok(sel == ["false", "true", "false", "false"] and abs(end["x"] - slots[1]) < 1.5, f"bubble: a drag lands on the nearest tab ({sel}, {end['x']:.1f})")
+    ok(page.evaluate("window.__ch") == [3, 1], f"bubble: pk:change fires once for each new pick ({page.evaluate('window.__ch')})")
+    settle(page)
+
+
+@behaviour
+def bubble_jiggle(page):
+    page.evaluate("Parts.motion.setSpeed(1)")
+    scroll_to(page, "#p4")
+    x0, y = tab_center(page, "#p4", 0); x3, _ = tab_center(page, "#p4", 3)
+    page.evaluate("window.__jig = []; (function rec() { const s = Parts.bubble.state(document.querySelector('#p4 .pk-tabbar')); if (s.up && s.lift > 0.97) window.__jig.push([s.jiggle.height, s.jiggle.width, s.jiggle.speed]); window.__jr = requestAnimationFrame(rec); })(); 0")
+    def run(steps, pause):
+        page.evaluate("window.__jig = []; 0")
+        page.mouse.move(x0, y); page.mouse.down(); page.wait_for_timeout(260)
+        for i in range(1, steps + 1):
+            page.mouse.move(x0 + (x3 - x0) * i / steps, y); page.wait_for_timeout(pause)
+        page.wait_for_timeout(500)
+        page.mouse.up(); settle(page)
+        return page.evaluate("window.__jig")
+    slow, fast = run(40, 25), run(5, 16)
+    lo = lambda j: min([h for h, w, s in j] or [0])
+    hi = lambda j: max([h for h, w, s in j] or [0])
+    print(f"  jiggle: slow drag squashes {lo(slow):.2f} pt, fast {lo(fast):.2f} pt; fast bounces {hi(fast):.2f} pt")
+    ok(lo(fast) < lo(slow) - 0.5 and lo(fast) < -2, f"bubble: a faster drag squashes it more ({lo(slow):.2f}, {lo(fast):.2f})")
+    ok(hi(fast) > 1, f"bubble: let go of a squash, it bounces taller ({hi(fast):.2f})")
+    ok(all(abs(h + w) < 1e-6 for h, w, s in fast + slow), "bubble: the width mirrors the height (wider when flat, narrower when tall)")
+    page.evaluate("Parts.settings({ tabBar: { bubble: { mirror: false } } }); 0")
+    off = run(5, 16)
+    page.evaluate("Parts.settings({ tabBar: { bubble: { mirror: true } } }); cancelAnimationFrame(window.__jr); 0")
+    ok(any(abs(h + w) > 0.2 for h, w, s in off), "bubble: with mirror off, the width follows its own two values")
+
+
+@behaviour
+def bubble_fallbacks(page):
+    page.evaluate("Parts.motion.setSpeed(1)")
+    # folded or searching: no bubble
+    scroll_to(page, "#p5")
+    page.click("#foldBtn"); page.wait_for_timeout(50)
+    r = page.evaluate("""(() => { const b = document.querySelector('#foldDemo .pk-tabbar'), t = b.querySelector('.pk-tab'), r = t.getBoundingClientRect();
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 31, button: 0, clientX: r.left + 5, clientY: r.top + 5 }));
+      const up = Parts.bubble.state(b).up; window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 31 })); document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 31 })); return up; })()""")
+    page.click("#foldBtn")
+    ok(r is False, "bubble: none while the bar is folded")
+    scroll_to(page, "#p6"); page.click("#p6 .pk-search-circle"); page.wait_for_timeout(50)
+    r = page.evaluate("""(() => { const b = document.querySelector('#p6 .pk-tabbar'), r = b.getBoundingClientRect();
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 32, button: 0, clientX: r.left + 30, clientY: r.top + 30 }));
+      const up = Parts.bubble.state(b).up; document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 32 })); return up; })()""")
+    page.click("#p6 .pk-search-close")
+    ok(r is False, "bubble: none while searching")
+    # Reduce Motion: no jiggle, swell, stretch, rise or moving anchor; it appears and travels on the 100 ms fade
+    page.evaluate("Kit.set('Motion', 2)")
+    scroll_to(page, "#p4")
+    x0, y = tab_center(page, "#p4", 0); x3, _ = tab_center(page, "#p4", 3)
+    page.evaluate("window.__rm = []; (function rec() { const s = Parts.bubble.state(document.querySelector('#p4 .pk-tabbar')); if (s.up) window.__rm.push([s.jiggle.height, s.bar ? s.bar.sx : 1, s.bar ? s.bar.y : 0, s.anchor.x, s.lift]); window.__rr = requestAnimationFrame(rec); })(); 0")
+    page.mouse.move(x0, y); page.mouse.down()
+    for i in range(1, 6):
+        page.mouse.move(x0 + (x3 - x0) * i / 5, y - 12 * i); page.wait_for_timeout(16)
+    page.wait_for_timeout(200)
+    st = bstate(page)
+    page.mouse.up(); settle(page)
+    rm = page.evaluate("cancelAnimationFrame(window.__rr); window.__rm")
+    ok(st["reduced"] and all(h == 0 for h, *_ in rm) and all(abs(sx - 1) < 1e-6 and abs(by) < 1e-6 for _, sx, by, *_ in rm),
+       f"Reduce Motion: no jiggle, swell, stretch or rise ({rm[-1] if rm else None})")
+    ok(len({round(a, 3) for *_, a, l in rm}) == 1, "Reduce Motion: the anchor doesn't move")
+    x1, _ = tab_center(page, "#p4", 1)
+    page.mouse.click(x1, y)
+    page.wait_for_timeout(250)
+    st = bstate(page)
+    ok(abs(st["x"] - st["slots"][1]) < 1 and st["lift"] > 0.99, f"Reduce Motion: a tap travels and appears on the short fade, well before a spring would ({st['x']:.1f}, lift {st['lift']:.2f})")
+    settle(page)
+    page.evaluate("Kit.set('Motion', 0)")
+    # Reduce transparency: the CSS bubble, solid
+    page.evaluate("Kit.set('Reduce transparency', 1)")
+    page.mouse.move(x0, y); page.mouse.down(); page.wait_for_timeout(350)
+    r = page.evaluate(f"""(() => {{ const b = {BAR4}, h = b.offsetParent, bub = h.querySelector('.pk-bubble-css'), acc = h.querySelector('.pk-bubble-row.pk-accent');
+      const want = getComputedStyle(b).getPropertyValue('--pk-bubble-solid').trim();
+      return {{ st: Parts.bubble.state(b), lens: getComputedStyle(Parts.lens.canvas).visibility, bg: bub && getComputedStyle(bub).backgroundColor, want,
+        clip: acc && getComputedStyle(acc).clipPath.startsWith('inset('), copies: h.querySelectorAll('.pk-bubble-row .pk-tab').length, accent: acc && getComputedStyle(acc.querySelector('.pk-tab')).color, ac: getComputedStyle(b).getPropertyValue('--accent').trim() }}; }})()""")
+    page.mouse.up(); settle(page)
+    ok(r["st"]["mode"] == "css" and r["st"]["solid"] and r["lens"] == "hidden", f"Reduce transparency: the CSS bubble, no canvas ({r['st'].get('mode')}, {r['lens']})")
+    ok(r["bg"] in ("rgb(255, 255, 255)", "rgba(255, 255, 255, 1)") and r["clip"] and r["copies"] == 8, f"Reduce transparency: a solid bubble with the accent copy cut to it ({r['bg']}, {r['clip']}, {r['copies']})")
+    left = page.evaluate(f"{BAR4}.offsetParent.querySelectorAll('.pk-bubble-css, .pk-bubble-row').length")
+    ok(left == 0, f"Reduce transparency: the CSS bubble is cleared away after ({left})")
+    page.evaluate("Kit.set('Reduce transparency', 0)")
+    # tabBar.bubble off: 1.3's highlight, exactly
+    page.evaluate("Kit.set('Tab bar bubble', 1)")
+    page.evaluate("Parts.motion.setSpeed(0)")
+    x2, _ = tab_center(page, "#p4", 2)
+    page.mouse.move(x2, y); page.mouse.down(); page.wait_for_timeout(30)
+    r = page.evaluate(f"""(() => {{ const b = {BAR4}, k = b.querySelector('.pk-tab-ind'), t = b.querySelectorAll('.pk-tab')[2];
+      return {{ live: k.classList.contains('pk-live'), under: t.classList.contains('pk-under'), bx: k.style.getPropertyValue('--pk-bx'), want: ((k.offsetWidth + 12) / k.offsetWidth).toFixed(3),
+        bubbling: b.classList.contains('pk-bubbling'), up: Parts.bubble.state(b).up, lens: getComputedStyle(Parts.lens.canvas).visibility }}; }})()""")
+    page.mouse.up(); page.wait_for_timeout(50)
+    ok(r["live"] and r["under"] and r["bx"] == r["want"] and not r["bubbling"] and not r["up"] and r["lens"] == "hidden",
+       f"tabBar.bubble off: the 1.3 highlight turns to glass, swells 12 × 8 pt and grows the icon; no bubble ({r})")
+    ok(page.evaluate(f"{BAR4}.querySelectorAll('.pk-tab')[2].getAttribute('aria-selected')") == "true", "tabBar.bubble off: a tap still picks")
+    page.evaluate("Kit.set('Tab bar bubble', 0)")
+
+
+@behaviour
+def bubble_tab_counts(page):
+    # 2 and 6 tabs (a badge on one): the bubble is one tab's width plus 27 pt, and the badge keeps its colour in the picture
+    page.evaluate("Parts.motion.setSpeed(0)")
+    scroll_to(page, "#p4")
+    for n in (2, 6):
+        page.evaluate(f"""(() => {{ const st = document.querySelector('#p4 .gal-stage'), d = document.createElement('div'); d.className = 'pk-dock pk-inline'; d.id = 'tc';
+          d.innerHTML = '<nav class="pk-tabbar pk-glass" data-name="Tab bar"><span class="pk-tab-ind"></span>' + Array.from({{ length: {n} }}, (_, i) => '<button class="pk-tab' + (i ? '' : ' on') + '"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg><span>T' + (i + 1) + '</span>' + (i === {n} - 1 ? '<span class="pk-badge">3</span>' : '') + '</button>').join('') + '</nav>';
+          st.append(d); 0; }})()""")
+        page.wait_for_timeout(60)
+        bar = "document.querySelector('#tc .pk-tabbar')"
+        x, y = tab_center(page, "#tc", n - 1)
+        page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(150)
+        st = bstate(page, bar)
+        tw = page.evaluate(f"{bar}.querySelector('.pk-tab').offsetWidth")
+        badge = page.evaluate(f"(() => {{ const b = {bar}, r = b.getBoundingClientRect(), k = b.querySelector('.pk-badge').getBoundingClientRect(), s = r.width / b.offsetWidth; return [(k.left - r.left) / s, (k.top - r.top) / s, k.width / s, k.height / s]; }})()")
+        px = page.evaluate(f"Parts.bubble.pixels({bar}, {badge[0]}, {badge[1]}, {badge[2]}, {badge[3]})")
+        page.mouse.up(); page.wait_for_timeout(200)
+        sel = page.evaluate(f"[...{bar}.querySelectorAll('.pk-tab')].findIndex(t => t.getAttribute('aria-selected') === 'true')")
+        page.evaluate("document.querySelector('#tc').remove(); 0")
+        ok(st["up"] and abs(st["bubble"]["w"] - tw - 27) < 1 and abs(st["x"] - st["slots"][n - 1]) < 1, f"bubble: {n} tabs, one tab's width plus 27 pt, over the tapped tab ({st.get('bubble')}, {tw})")
+        ok(sel == n - 1, f"bubble: {n} tabs, the tap picks the last tab ({sel})")
+        red = sum(1 for row in px for (r, g, b, a) in row if a > 150 and r > 180 and g < 120 and b < 120)
+        ok(red > 20, f"bubble: a badge keeps its own colour in the lens ({red} red points)")
+
+
+def bubble_no_webgl(browser, url):
+    print("Bubble without WebGL")
+    vp, mobile, dev = DEVICES["iphone"]
+    ctx = browser.new_context(viewport=vp, device_scale_factor=2, has_touch=True, is_mobile=True)
+    ctx.add_init_script("""(() => { const g = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (t, o) { return /^webgl/.test(t) ? null : g.call(this, t, o); }; })()""")
+    page = ctx.new_page()
+    page.errors = []
+    page.on("pageerror", lambda e: page.errors.append(str(e)))
+    page.on("console", lambda m: page.errors.append(m.text) if m.type == "error" else None)
+    page.goto(url)
+    page.wait_for_function("window.Kit && window.Parts && document.querySelector('#wrap .gal-sub')")
+    page.evaluate("Parts.motion.setSpeed(1)")
+    ok(page.evaluate("Parts.lens.ok") is False, "no WebGL: the lens says so, once, at start-up")
+    scroll_to(page, "#p4")
+    x0, y = tab_center(page, "#p4", 0); x2, _ = tab_center(page, "#p4", 2)
+    page.mouse.move(x0, y); page.mouse.down(); page.wait_for_timeout(300)
+    drag(page, x0, y, x2, y, steps=10, release=False); page.wait_for_timeout(200)
+    r = page.evaluate(f"""(() => {{ const b = {BAR4}, h = b.offsetParent, bub = h.querySelector('.pk-bubble-css'), acc = h.querySelector('.pk-bubble-row.pk-accent');
+      return {{ st: Parts.bubble.state(b), bg: bub && getComputedStyle(bub).backgroundColor, clip: acc && getComputedStyle(acc).clipPath }}; }})()""")
+    page.locator(".kit-screen").screenshot(path=str(SHOTS / "bubble-css.png"))
+    page.mouse.up(); page.wait_for_timeout(700)
+    ok(r["st"]["mode"] == "css" and not r["st"]["solid"] and r["bg"] and "0.6" in r["bg"], f"no WebGL: the CSS bubble, see-through ({r['st'].get('mode')}, {r['bg']})")
+    ok(r["clip"] and r["clip"].startswith("inset("), f"no WebGL: the accent copy is cut to the bubble ({r['clip']})")
+    sel = page.evaluate(f"[...{BAR4}.querySelectorAll('.pk-tab')].map(t => t.getAttribute('aria-selected'))")
+    ok(sel == ["false", "false", "true", "false"], f"no WebGL: the drag still picks ({sel})")
+    screen_state(page, "no WebGL")
+    ctx.close()
+
+
+def bubble_looks(browser, url, shots):
+    print("Bubble looks")
+    for device in DEVICES:
+        page = open_demo(browser, url, device)
+        page.evaluate("Parts.motion.setSpeed(1)")
+        for look in (0, 1):
+            page.evaluate(f"Kit.set('Look', {look})")
+            scroll_to(page, "#p4")
+            page.wait_for_timeout(100)
+            page.evaluate(f"Parts.bubble.hold({BAR4}, true)")
+            page.wait_for_timeout(450)
+            st = bstate(page)
+            label = f"bubble · {device} · {'dark' if look else 'light'}"
+            ok(st["up"] and st["mode"] == "webgl" and st["lift"] > 0.97, f"{label}: up on WebGL ({st.get('mode')})")
+            # the overhang just above the bar: light frost in light, the dark glass colour in dark
+            bx = st["bubble"]["x"]
+            top = st["bar"]["y"] - 1.6
+            px = page.evaluate(f"Parts.bubble.pixels({BAR4}, {bx - 6}, {top}, 12, 1)")[0]
+            lum = sum((p[0] + p[1] + p[2]) / 3 for p in px) / len(px)
+            ok((lum > 170) if not look else (lum < 120), f"{label}: the overhang uses the look's colour (brightness {lum:.0f})")
+            page.locator("#p4 .gal-stage").screenshot(path=str(shots / f"bubble-{device}-{'dark' if look else 'light'}.png"))
+            screen_state(page, label)
+            page.evaluate(f"Parts.bubble.hold({BAR4}, false)")
+            settle(page)
+            # a tap still picks in this size (the scaled frame on iPad)
+            x, y = tab_center(page, "#p4", 1 + look)
+            page.mouse.click(x, y); page.wait_for_timeout(500)
+            sel = page.evaluate(f"[...{BAR4}.querySelectorAll('.pk-tab')].findIndex(t => t.getAttribute('aria-selected') === 'true')")
+            ok(sel == 1 + look, f"{label}: a tap picks the tab under the finger ({sel})")
+            settle(page)
+        page.evaluate("Kit.set('Look', 0)")
+        page.context.close()
+
+
 SHOTS = KIT / "shots"
 
 
@@ -1000,6 +1341,8 @@ def main():
         settings_checks(browser, base)
         differences_checks(browser, base)
         looks(browser, url, shots)
+        bubble_looks(browser, url, shots)
+        bubble_no_webgl(browser, url)
         print("Behaviours")
         for fn in BEHAVIOURS:
             page = open_demo(browser, url, "iphone")

@@ -1,4 +1,4 @@
-/* Parts kit 1.3.0 · one set of Liquid Glass parts for any app or prototype.
+/* Parts kit 1.4.0 · one set of Liquid Glass parts for any app or prototype.
    MIT licence. Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
    Load this file first, then your app's own stylesheet: any value below that your app also sets is yours.
    Every corner, press, curve and duration the parts use is named in the defaults block; nothing below it writes its
@@ -54,6 +54,10 @@
   --pk-knob: #ffffff;
   --pk-row-press: #d1d1d6;
   --pk-seg-knob: #ffffff;
+  --pk-bubble-tint: #ffffff; /* (4) the frost inside the tab bar's bubble */
+  --pk-bubble-over-tint: #f7f7f7; /* (4) … where it hangs past the bar */
+  --pk-bubble-css: rgba(255, 255, 255, 0.6); /* (4) the bubble drawn without WebGL */
+  --pk-bubble-solid: #ffffff; /* (4) … with Reduce transparency */
 
   /* shadows: the named set of three */
   --shadow-lifted: 0 8px 24px rgba(0, 0, 0, 0.18); /* a lifted card or row */
@@ -129,6 +133,13 @@
   --ease-sheet: var(--ease-out);
   --ease-menu-open: var(--ease-out);
   --ease-menu-close: var(--ease-out);
+  --ease-bubble-in: var(--ease-out);
+  --ease-bubble-out: var(--ease-out);
+  --ease-bubble-swell: var(--ease-out);
+  --ease-bubble-unswell: var(--ease-out);
+  --ease-bubble-follow: var(--ease-out);
+  --ease-bubble-travel: var(--ease-out);
+  --ease-bubble-snap: var(--ease-out);
   --dur-gentle: 0ms;
   --dur-nav: 0ms;
   --dur-ripple: 0ms;
@@ -141,6 +152,13 @@
   --dur-sheet: 0ms;
   --dur-menu-open: 0ms;
   --dur-menu-close: 0ms;
+  --dur-bubble-in: 0ms;
+  --dur-bubble-out: 0ms;
+  --dur-bubble-swell: 0ms;
+  --dur-bubble-unswell: 0ms;
+  --dur-bubble-follow: 0ms;
+  --dur-bubble-travel: 0ms;
+  --dur-bubble-snap: 0ms;
 
   /* layout */
   --dockb: 21px;
@@ -151,6 +169,77 @@
   --pk-kb: 0px; /* (6) how far the keyboard has lifted the searching dock (set by parts-kit.js) */
   --pk-bar-top: 54px; /* where the top bar's buttons sit (below the status bar) */
   --pk-speed: 1; /* the motion speed: 1 normal, 4 slow, 0 off (set by parts-kit.js) */
+
+  /* (4) the tab bar's Liquid Glass bubble (tabBar.bubble). Tuned by eye against iOS 27 on an iPhone. Each is one
+     named value, so an app (or one tab bar) can differ with a line of its own; Parts.differences() lists it. */
+  --pk-bubble-width: 27px; /* how much wider than one tab the bubble is */
+  --pk-bubble-height: 3.5px; /* how far it hangs past the top and bottom of the bar */
+  --pk-bubble-squash-at: 130; /* drag speed (pt/s) that squashes it fully */
+  --pk-bubble-squash-time: 340ms; /* how quickly it compacts (no bounce) */
+  --pk-bubble-jiggle-delay: 20ms; /* flat for this long after slowing, before it springs back */
+  --pk-bubble-jiggle-time: 400ms; /* one wobble */
+  --pk-bubble-jiggle-damping: 0.33; /* 1 = no bounce */
+  --pk-bubble-height-min: 6px; /* most height lost at full squash */
+  --pk-bubble-height-max: 8.8px; /* most height gained at the top of the first bounce */
+  --pk-bubble-width-max: 10px; /* only when the width doesn't mirror the height */
+  --pk-bubble-width-min: 7.8px; /* … */
+  --pk-bubble-band: 13px; /* the edge band: the only part that bends; the middle never does */
+  --pk-bubble-strength: 4.5px; /* how far content is pushed at the rim */
+  --pk-bubble-fade: 1.65; /* how tight to the rim the bending stays */
+  --pk-bubble-fringe: 0; /* rainbow split at the rim */
+  --pk-bubble-rings: 3; /* Fresnel rings in the band */
+  --pk-bubble-ring-spacing: 1;
+  --pk-bubble-ring-steps: 0.09;
+  --pk-bubble-ring-repeat: 0;
+  --pk-bubble-magnify: 0.06; /* in the band only */
+  --pk-bubble-flip: 0.1; /* the mirrored slice at the rim */
+  --pk-bubble-ring-lines: 0;
+  --pk-bubble-ring-fringe: 0.14;
+  --pk-bubble-light: 0.5; /* the rim light: the lit side */
+  --pk-bubble-light-far: 0.28; /* … the opposite side */
+  --pk-bubble-light-all: 0.12; /* … all round */
+  --pk-bubble-light-width: 0px;
+  --pk-bubble-light-inset: 0.15px;
+  --pk-bubble-light-soft: 2.6px;
+  --pk-bubble-light-angle: 188deg; /* light from the left, slightly below */
+  --pk-bubble-light-spread: 4.6;
+  --pk-bubble-glow: 0.08;
+  --pk-bubble-glow-spread: 2.5px;
+  --pk-bubble-dark-edge: 0.16;
+  --pk-bubble-dark-edge-width: 0.7px;
+  --pk-bubble-blur: 0px;
+  --pk-bubble-edge-blur: 1.45px; /* in the band only */
+  --pk-bubble-frost: 0.15; /* the veil inside the bubble */
+  --pk-bubble-overhang: 0.9; /* the veil where it hangs past the bar */
+  --pk-bubble-lean: 0; /* the bar sliding sideways with the finger (off) */
+  --pk-bubble-pull: 0.35; /* … past the ends (only with a shift) */
+  --pk-bubble-shift: 0px; /* … at most */
+  --pk-bubble-stretch: 3; /* the bar stretching from its anchor */
+  --pk-bubble-thin: 0; /* thinning as it stretches */
+  --pk-bubble-anchor-x: 0.43; /* the fixed anchor, across the bar */
+  --pk-bubble-anchor-lag: 140ms; /* the following anchor catching the finger */
+  --pk-bubble-anchor-follow-y: 0;
+  --pk-bubble-anchor-min: 0.42; /* the range the following anchor moves in */
+  --pk-bubble-anchor-max: 0.61;
+  --pk-bubble-anchor-y: 1; /* the bottom edge; the press swell grows from here too */
+  --pk-bubble-rise: 0.27; /* dragging up: the top edge rises */
+  --pk-bubble-rise-max: 3px;
+  --pk-bubble-rise-bottom: 0.29; /* … and the bottom edge follows this much */
+  --pk-bubble-rise-spread: 0;
+  --pk-bubble-rise-extra: 0;
+  --pk-bubble-swell-width: 18.6px; /* the bar while touched */
+  --pk-bubble-swell-height: 1.2px;
+  --pk-bubble-bar-time: 400ms; /* the bar following and settling */
+  --pk-bubble-bar-damping: 1;
+  --pk-bubble-icon-swell: 0%; /* the icons don't grow when pressed */
+  --pk-bubble-icon-swell-y: 0;
+  --pk-bubble-icon-ride: 1; /* the icons ride the bar's swell */
+  --pk-bubble-icon-rise: 0.5; /* the icons stretch half as much as the bar when dragging up */
+  --pk-bubble-icon-spread: 0;
+  --pk-bubble-icon-rise-y: 0.84;
+  --pk-bubble-tap: 120ms; /* a tap shows the full bubble at least this long */
+  --pk-bubble-overrun: 20px; /* past the first or last tab, at most */
+  --pk-bubble-overrun-rate: 0.35;
 }
 
 /* DEFAULTS · dark, from the iPhone's setting. The same block again for .pk-dark (a forced look); tools/check.py
@@ -191,6 +280,9 @@
     --pk-switch-off: rgba(120, 120, 128, 0.32);
     --pk-row-press: #3a3a3c;
     --pk-seg-knob: #636366;
+    --pk-bubble-over-tint: #2c2c30;
+    --pk-bubble-css: rgba(255, 255, 255, 0.2);
+    --pk-bubble-solid: #3a3a3c;
     --shadow-glow: 0 0 22px rgba(10, 132, 255, 0.45);
   }
 }
@@ -229,6 +321,9 @@
     --pk-switch-off: rgba(120, 120, 128, 0.32);
     --pk-row-press: #3a3a3c;
     --pk-seg-knob: #636366;
+    --pk-bubble-over-tint: #2c2c30;
+    --pk-bubble-css: rgba(255, 255, 255, 0.2);
+    --pk-bubble-solid: #3a3a3c;
     --shadow-glow: 0 0 22px rgba(10, 132, 255, 0.45);
 }
 :where(.pk-dark) {
@@ -790,6 +885,49 @@ body > .pk-layer {
    lift from the visible area as the keyboard moves, so there is no transition here. */
 .pk-dock.pk-kb {
   translate: 0 calc(var(--pk-kb-lift) * -1);
+}
+
+/* (4) the Liquid Glass bubble (tabBar.bubble, 1.4). While a finger is on the bar, a separate glass bubble rides on top
+   of it: one small WebGL canvas (.pk-lens) over the bar and 36 pt around it, shown only while the bubble is up. It draws
+   the tabs' icons itself (from a picture made once), so the real tabs are hidden meanwhile. Without WebGL, or with
+   Reduce transparency, a CSS bubble does the same with no bending: a copy of the tabs, and an accent copy cut to the
+   bubble's shape. parts-kit.js moves everything with transforms; nothing here animates. */
+.pk-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  pointer-events: none;
+  visibility: hidden;
+}
+.pk-lens.pk-on {
+  visibility: visible;
+}
+.pk-tabbar.pk-bubbling > :is(.pk-tab, .pk-tab-ind) {
+  visibility: hidden;
+}
+.pk-bubble-css,
+.pk-bubble-row {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.pk-bubble-css {
+  z-index: 2;
+  border-radius: 999px;
+}
+.pk-bubble-row {
+  z-index: 3;
+  display: flex;
+  height: 64px;
+  padding: 4px;
+}
+.pk-bubble-row > .pk-tab {
+  color: var(--fg);
+}
+.pk-bubble-row.pk-accent > .pk-tab {
+  color: var(--accent);
 }
 
 /* (10) a pushed page slides in from the right while the page underneath moves a third left and dims */

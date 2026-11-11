@@ -1,3 +1,92 @@
+# Handoff · Parts kit 1.4.0 · Liquid Glass tab bar bubble · 5 Nov 2026
+
+> **Render:** Approved by Ivan on 5 Nov 2026, 23:14 ("Render for both", for both pieces of the Singing project's `claude/liquid_glass_tabbar_blueprint.md`), for piece A as written, with every *Default if unanswered* taken.
+> **Build:** Given by Ivan on 11 Nov 2026, 20:34 ("Build for Parts kit 1.4.0, just do it here now"), in the same chat as reading the handoff. Built by Claude. Released as **1.4.0** on 11 Nov 2026.
+> **The rule for every kit version:** Render approves a named scope only; nothing is built, committed or released until Ivan separately says Build.
+
+**For:** Claude · **Job:** build · **Builder:** Claude
+**Repo:** `imperialfox/parts-kit`, from 1.3.0 (`882638a`) to 1.4.0. No Q number: it belongs to no app.
+**Plan (long notes):** the Singing project's `claude/liquid_glass_tabbar_blueprint.md` › A. Source: `claude/tab_bubble_prototype.html` and `_part2.html`, the values in `claude/liquid_glass_tabbar_template.md`, the Recon `claude/tab_bubble_recon_2026-11-05.md`.
+**Needed by:** Vocal Sessions Q58 · Interface: Liquid Glass Tab Bar.
+
+**Goal:** part 4 (the tab bar) gets the tuned bubble, and every app gets it by pinning 1.4.0.
+
+## Agreed
+
+1. **The bubble on part 4,** as in the prototype: a separate glass bubble on top of the bar; partial recolour, with icons that never move or grow; the rim band with its Fresnel rings, the rim light and the frost; the press swell and the stretch from the inverted Follow anchor; the drag-up rise; the jiggle, with the width mirroring the height; tap travel.
+2. **How it's drawn:** one small WebGL canvas over the bar only (36 pt margin), shown only while the bubble is up; the icon picture built once; one draw per frame, and no `backdrop-filter` on moving parts.
+3. **A shared lens module** (`Parts.lens`) that part 4 uses, so the segmented control and switches can use it later without a second WebGL context.
+4. **The tuned values (5 Nov, 23:02) as the defaults:** as named values (`--pk-bubble-*` and springs) and a `tabBar.bubble` settings block; an app can differ through 1.1's differences list.
+5. **`tabBar.bubble: false`** gives back 1.3.0's indicator exactly.
+6. **The Parts gallery's part 4** shows the bubble, with the prototype's Tune panel behind a "Tune" switch.
+7. **Release files:** version 1.4.0, with its changelog, README (part 4 row and a "Liquid Glass bubble" section), checksums, and this handoff.
+
+**Defaults taken:** dark mode with the same shape and motion and the dark glass colours for the frost and overhang · Reduce Motion: no jiggle, bar stretch or rise, no moving anchor, the 100 ms fade · Reduce transparency: the CSS fallback, solid · no WebGL: the same fallback, chosen once at start-up · no bubble folded or searching · 2 to 6 tabs, one tab's width plus 27 pt · badges and text size drawn into the picture, made again when they change, never during a drag · the old press look replaced while the bubble is on, kept when it's off.
+
+## Out of scope
+
+Any other part (the segmented control and switches using the lens come later), Vocal Sessions (Q58), haptics, bending the live page behind the overhang.
+
+## Done when
+
+- `tools/check.py` passes everything 1.3.0 checked, plus the bubble's checks (up only while touched, one draw a frame under 2 ms with a busy page too, half an icon half accent, landing and tap travel, the jiggle, each fallback, light and dark at both sizes).
+- The gallery is republished on 1.4.0 with the Tune switch.
+
+**Effort guess:** medium to heavy.
+
+## Debrief · 11 Nov 2026
+
+**What changed**
+- `parts-kit.js`:
+  - `Parts.lens`: one WebGL2 context for the page, on one canvas that moves to whichever part is touched. Programs by name, textures, `draw`, `read` (for tests) and `stats`.
+  - The bubble, ported from the prototype: the same shader, springs (stepped at 240+ a second), jiggle, inverted Follow anchor, drag-up rise, press swell, tap travel and drop. It reads its numbers from the bar's style each touch, so an app or one bar can differ.
+  - The icon picture is drawn straight from the tabs' SVG shapes (paths, circles, ellipses, rects, lines, polylines, polygons, groups), labels and badges, twice (normal and accent).
+  - The CSS bubble for Reduce transparency and no WebGL: a copy of the tabs and an accent copy cut to the bubble, riding the bar.
+  - Settings `tabBar.bubble` (`on`, `anchor`, `invert`, `icons`, `mirror`; `true` / `false` as shorthand). Seven named springs (`bubble-…`). `Parts.differences()` lists the bubble's values app-wide (`value --pk-bubble-…`) and on one tab bar. `Parts.bubble.hold / state / values / springs / pixels`; `pk:bubble { up }`.
+  - The tab bar's pointer handling goes to the bubble when it's on; the 1.3 path is untouched when it's off.
+- `parts-kit.css`: 66 `--pk-bubble-…` values and four colours (with dark values) in the defaults block, spring stand-ins, and the lens and CSS-bubble rules (nothing animates in CSS). The value rule still passes.
+- `demo/index.html`: part 4's text, the Tune switch and panel (every value as a slider with − and +, the anchor and icon modes, Hold bubble up, Show anchor, a frame meter, Copy values, Reset), and a "Tab bar bubble" switch in the controls.
+- README (settings, named values, springs, part 4 row, "Liquid Glass bubble"), CHANGELOG, SHA256SUMS, `tools/check.py`.
+
+**How it was checked** (`python tools/check.py`, one full run, all passed)
+- Everything 1.3.0 checked, unchanged and passing (the tab tap and drag checks now run through the bubble).
+- New: the canvas hidden at rest and shown only while touched, one canvas for the page; the bubble one tab's width plus 27 pt; the bar swelling; settling back with the real tabs shown.
+- Cost, headless: 268 frames at 0.40 ms average (2.4 ms longest), and with a page busy 8 ms a frame, 284 frames at 0.26 ms average (4.8 ms longest); one draw every frame.
+- Half an icon: 46 accent points inside the bubble and none outside; 74 normal points outside and none inside.
+- A tap picks at once (with `aria-selected`) and travels; a drag lands on the nearest tab; `pk:change` once each.
+- Jiggle: a slow drag squashes 1.4 pt, a fast one 5.7 pt, and bounces 4.7 pt; the width mirrors the height on every frame, and not with mirror off.
+- No bubble folded or searching; Reduce Motion (no jiggle, swell, stretch, rise or anchor movement; a tap travels on the short fade); Reduce transparency (the solid CSS bubble, no canvas, cleared after); no WebGL (the see-through CSS bubble, a drag still picks); `tabBar.bubble` off (the 1.3 highlight, 12 × 8 pt, icon ×1.15, no canvas).
+- 2 and 6 tabs, with a badge kept red in the picture; light and dark at 402 × 874 and 820 × 1180 (the dark overhang uses the dark colour), screenshots looked at; the bubble's CSS values match the kit's numbers; differences and bad settings refused.
+
+**Decided along the way** (inside the scope; each is easy to change)
+1. **On by default.** `tabBar.bubble.on` is `true`, so an app gets the bubble by pinning 1.4.0, and `false` is the way back (A.5).
+2. **Reduce Motion also turns off the press swell,** since the kit's rule there is no movement or growth.
+3. **The picture is drawn from the SVG shapes, not loaded as images,** so it's ready at once. SVG text, images or `<use>` inside an icon aren't drawn.
+4. **The picture is made at a bar's first touch** (and again when stale), not at page load, so a page with several bars only holds pictures it uses. The WebGL choice is still made once, when the page first shows a tab bar.
+5. **The resting fill under the bubble uses `--pk-rest`,** so it follows dark mode (the prototype used a fixed black 10%).
+6. **The CSS bubble's tab copies ride the bar's whole swell;** with WebGL the icons stretch half as much when dragging up, as tuned.
+7. **The pixel check turns the rim's bending off on its bar,** so it tests the recolour alone. With bending on, the 13 pt band pushes an icon's inner half outward, as in the prototype.
+8. **The gallery's Tune values go on the gallery's own root,** so both its tab bars follow; Copy values gives CSS lines ready to paste, plus a settings line for the modes.
+
+**Notes**
+- Headless Chromium's software WebGL prints "GPU stall due to ReadPixels" warnings while the bubble is up. They are warnings, not errors, and the kit reads no pixels in normal frames.
+- `Parts.differences()` on the whole gallery now takes about 200 ms (it was 78), because of the Tune panel's extra elements.
+
+**What's left**
+- Q58 · Interface: Liquid Glass Tab Bar can now pin 1.4.0.
+- The segmented control and switches on `Parts.lens`: each its own plan.
+- Dark mode was tuned from the light values; tune it by eye in the gallery if it needs it.
+- **One thing for Ivan:** on GitHub, open the repo › Releases › *Draft a new release*, type the tag `v1.4.0` (target `main`), title "Parts kit 1.4.0", paste the 1.4.0 part of `CHANGELOG.md`, attach `parts-kit.css`, `parts-kit.js` and `SHA256SUMS.txt`, and publish.
+
+**For Ivan, on your phone** (the Parts gallery › 4 Tab bar, after "Tap to start" if it asks)
+1. Drag slowly, then fast, along the bar. Does the bubble squash flat and wide, then bounce taller and narrower?
+2. Tap from Home to Profile. Does the bubble rise out of Home, travel across and settle?
+3. Drag up from a tab. Does the top edge rise while the bottom barely moves?
+4. Switch the look to Dark and do 1 to 3 again.
+5. Turn on Reduce Motion. Does the bubble appear and move with no jiggle or stretch?
+
+---
+
 # Handoff · Parts kit 1.3 · 5 Nov 2026
 
 > **Render:** Approved by Ivan on 5 Nov 2026, 08:04 ("I also give you render permissions", the same instruction as Vocal Sessions Q50 to Q56), for the scope in the Singing project's `claude/ui_consistency_fixes_blueprint.md` › Parts kit 1.3.0.

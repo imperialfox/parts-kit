@@ -1,4 +1,4 @@
-/* Parts kit 1.3.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
+/* Parts kit 1.4.0 · one set of Liquid Glass parts for any app or prototype. MIT licence.
    Numbers from sdegenaar/liquid_glass_widgets (MIT), measured against iOS where marked.
 
    Use: load parts-kit.css and this file, then your settings file:  Parts.settings({ app: 'My app', … })
@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   if (window.Parts && window.Parts.version) return;
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
   const doc = document;
   const html = doc.documentElement;
 
@@ -51,7 +51,7 @@
     motion: ['kit', 'app'],
     springs: SPRINGMAP,
     root: ANY,
-    tabBar: { fold: BOOL, searchGap: NUM },
+    tabBar: { fold: BOOL, searchGap: NUM, bubble: { on: BOOL, anchor: ['follow', 'fixed', 'touch', 'end'], invert: BOOL, icons: ['row', 'each'], mirror: BOOL } },
     segmented: { style: ['gallery', 'squish'] },
     row: { press: ['highlight', 'shrink'] },
     choices: ['actionSheet', 'sheet'],
@@ -68,7 +68,7 @@
     motion: 'kit',
     springs: {},
     root: null,
-    tabBar: { fold: false, searchGap: 8 },
+    tabBar: { fold: false, searchGap: 8, bubble: { on: true, anchor: 'follow', invert: true, icons: 'row', mirror: true } },
     segmented: { style: 'gallery' },
     row: { press: 'highlight' },
     choices: 'actionSheet',
@@ -150,6 +150,9 @@
   // It can be called again later: only the lines given change.
   function settings(obj) {
     const out = [], bad = new Set();
+    // tabBar.bubble: false (or true) is short for tabBar.bubble: { on: false }
+    if (obj && typeof obj === 'object' && obj.tabBar && typeof obj.tabBar === 'object' && typeof obj.tabBar.bubble === 'boolean')
+      obj = Object.assign({}, obj, { tabBar: Object.assign({}, obj.tabBar, { bubble: { on: obj.tabBar.bubble } }) });
     validate(obj, SCHEMA, '', out, bad);
     if (!bad.has('')) merge(S, obj, SCHEMA, '', bad);
     out.forEach((m) => {
@@ -168,6 +171,7 @@
     html.classList.toggle('pk-seg-squish', S.segmented.style === 'squish');
     html.style.setProperty('--pk-search-gap', (+S.tabBar.searchGap || 0) + 'px');
     if (!S.tabBar.fold) doc.querySelectorAll('.pk-dock.pk-folded').forEach((d) => d.classList.remove('pk-folded'));
+    if (!S.tabBar.bubble.on) liveBubbles.forEach(bubbleEnd);
     motion.use(S.springs);
     motion.publish();
     localizeAll();
@@ -194,6 +198,14 @@
     sheet: fromKC(220, 30), // sheets moving between stops
     'menu-open': { z: 0.73, f: 1.74 }, // menus and popovers growing out of their button
     'menu-close': { z: 0.74, f: 2.25 }, // … and back
+    // (4) the tab bar's bubble (1.4), tuned by eye against iOS 27 (response 0.20 s and damping 0.85 is f 5, z 0.85)
+    'bubble-in': { z: 0.85, f: 5 }, // the bubble rising out of the picked tab
+    'bubble-out': { z: 1, f: 6.25 }, // … and settling back into it
+    'bubble-swell': { z: 0.9, f: 4.545 }, // the bar swelling while touched
+    'bubble-unswell': { z: 0.6, f: 3.333 }, // … and back, with one small dip
+    'bubble-follow': { z: 0.95, f: 10 }, // the bubble following the finger
+    'bubble-travel': { z: 0.85, f: 3.571 }, // a tap: the bubble travelling to the tapped tab
+    'bubble-snap': { z: 0.85, f: 4 }, // a drag let go: the bubble landing on the nearest tab
   };
   const linearOK = !!(window.CSS && CSS.supports && CSS.supports('transition-timing-function', 'linear(0, 1)'));
   // the same sampling as an app MOTION.curve() (40 steps, settled at 1/500), plus critically damped springs
@@ -447,7 +459,7 @@
         else if (r.selectorText === ':where(:root)' && r.style.getPropertyValue('--pk-speed'))
           for (let i = 0; i < r.style.length; i++) {
             const n = r.style[i];
-            if (/^--(dur|ease)-/.test(n) && !C[n.replace(/^--(dur|ease)-/, '')]) out[n] = r.style.getPropertyValue(n).trim();
+            if ((/^--(dur|ease)-/.test(n) && !C[n.replace(/^--(dur|ease)-/, '')]) || /^--pk-bubble-/.test(n)) out[n] = r.style.getPropertyValue(n).trim();
           }
       }
     };
@@ -468,6 +480,12 @@
     };
     const x = ms(a), y = ms(b);
     if (x != null && y != null) return Math.abs(x - y) < 0.01;
+    const num = (v) => {
+      const m = /^(-?[\d.]+)(px|deg|%)?$/.exec(v);
+      return m ? [+m[1], m[2] || ''] : null;
+    };
+    const p = num(a), q = num(b);
+    if (p && q) return p[1] === q[1] && Math.abs(p[0] - q[0]) < 1e-6;
     return a.replace(/\s+/g, '') === b.replace(/\s+/g, '');
   };
   const label = (el) =>
@@ -499,13 +517,14 @@
     const hs = getComputedStyle(html);
     Object.keys(kit).forEach((n) => {
       const v = hs.getPropertyValue(n).trim();
-      if (v && !sameTime(v, kit[n])) add('timing', n, v, kit[n]);
+      if (v && !sameTime(v, kit[n])) add(/^--pk-bubble-/.test(n) ? 'value' : 'timing', n, v, kit[n]);
     });
     // single elements on the current screen: a timing or spring that differs from its parent's
     localizeAll();
     const R = o.root ? (typeof o.root === 'string' ? doc.querySelector(o.root) : o.root) : rootEl();
     if (R) {
-      const names = Object.keys(kit);
+      const names = Object.keys(kit).filter((n) => !/^--pk-bubble-/.test(n));
+      const bubbleNames = Object.keys(kit).filter((n) => /^--pk-bubble-/.test(n));
       const springs = Object.keys(C);
       const cs = new Map();
       const style = (el) => {
@@ -515,6 +534,11 @@
       const els = [R].concat($$('*', R)).filter((el) => el !== html && el.parentElement);
       els.forEach((el) => {
         const a = style(el), b = style(el.parentElement);
+        if (el.classList.contains('pk-tabbar'))
+          bubbleNames.forEach((n) => {
+            const x = a.getPropertyValue(n).trim(), y = hs.getPropertyValue(n).trim();
+            if (x !== y && !sameTime(x, y)) add('element', n, x, y, el);
+          });
         names.forEach((n) => {
           const x = a.getPropertyValue(n).trim(), y = b.getPropertyValue(n).trim();
           if (x !== y && !sameTime(x, y)) add('element', n, x, y, el);
@@ -766,6 +790,13 @@
     const bar = ev.target.closest && ev.target.closest(BARS);
     if (!bar || !indOf(bar)) return;
     refreshBar(bar);
+    if (bubbleWanted(bar)) {
+      barDrag = { bar, id: ev.pointerId, bubble: bubbleOf(bar) };
+      try {
+        bar.setPointerCapture(ev.pointerId);
+      } catch (e) {}
+      return bubbleDown(bar, ev);
+    }
     barDrag = { bar, id: ev.pointerId, x0: ev.clientX, moved: false, start: nearestItem(bar, barX(bar, ev)) };
     try {
       bar.setPointerCapture(ev.pointerId);
@@ -775,6 +806,7 @@
   });
   doc.addEventListener('pointermove', (ev) => {
     const d = barDrag;
+    if (d && ev.pointerId === d.id && d.bubble) return bubbleMove(d.bubble, ev);
     if (!d || ev.pointerId !== d.id || squishy(d.bar)) return;
     const bar = d.bar, s = scaleOf(bar);
     if (!d.moved && Math.abs((ev.clientX - d.x0) / s) < N.tap) return;
@@ -793,6 +825,7 @@
     const d = barDrag;
     if (!d || ev.pointerId !== d.id) return;
     barDrag = null;
+    if (d.bubble) return bubbleUp(d.bubble, ev);
     const bar = d.bar, k = indOf(bar);
     const i = d.moved ? nearestItem(bar, barX(bar, ev)) : d.start;
     k.classList.remove('pk-drag');
@@ -811,6 +844,7 @@
   function refreshAll() {
     refreshQueued = false;
     $$(BARS).forEach(refreshBar);
+    if (S.tabBar.bubble.on && doc.querySelector('.pk-tabbar')) chooseLens();
     $$('.pk-switch').forEach((sw) => {
       sw.setAttribute('aria-checked', String(sw.classList.contains('on')));
       if (!sw.hasAttribute('role')) {
@@ -830,6 +864,911 @@
   if (window.MutationObserver) new MutationObserver(queueRefresh).observe(doc.documentElement, { childList: true, subtree: true });
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', refreshAll);
   else queueRefresh();
+
+  /* ============================================================================================================
+     LENS · one WebGL context for the whole page, shared by every part that bends light (1.4: the tab bar's bubble;
+     later the segmented control and switches). One small canvas moves to whichever part is being touched, so a
+     page never has a second context. Started once (the first time a part asks); if WebGL is missing or fails, it
+     stays off for the page and the parts use their CSS look instead.
+     ============================================================================================================ */
+  const lens = (() => {
+    let cv = null, gl = null, tried = false, lost = false, last = null, px = 1, H = 0;
+    const progs = {};
+    const stats = { frames: 0, draws: 0, sum: 0, max: 0, frameDraws: 0, worst: 0 };
+    function start() {
+      if (tried) return;
+      tried = true;
+      cv = doc.createElement('canvas');
+      cv.className = 'pk-lens';
+      cv.dataset.name = 'Lens';
+      cv.setAttribute('aria-hidden', 'true');
+      try {
+        gl = cv.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: false, powerPreference: 'low-power' });
+      } catch (e) {
+        gl = null;
+      }
+      if (!gl) return;
+      const vb = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      gl.disable(gl.BLEND);
+      cv.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();
+        lost = true;
+      });
+    }
+    const ok = () => {
+      start();
+      return !!gl && !lost;
+    };
+    // a full-screen fragment program, compiled once by name; false if it won't compile (the part then uses CSS)
+    function program(name, fs, uniforms) {
+      if (!ok()) return false;
+      if (progs[name] !== undefined) return !!progs[name];
+      const sh = (t, src) => {
+        const x = gl.createShader(t);
+        gl.shaderSource(x, src);
+        gl.compileShader(x);
+        if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x));
+        return x;
+      };
+      try {
+        const p = gl.createProgram();
+        gl.attachShader(p, sh(gl.VERTEX_SHADER, '#version 300 es\nin vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'));
+        gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+        gl.bindAttribLocation(p, 0, 'a');
+        gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+        const u = {};
+        uniforms.forEach((n) => (u[n] = gl.getUniformLocation(p, n)));
+        progs[name] = { p, u };
+      } catch (e) {
+        progs[name] = null;
+        if (window.console) console.warn('Parts kit: the lens fell back to CSS (' + String(e.message || e).slice(0, 120) + ')');
+      }
+      return !!progs[name];
+    }
+    // a texture from a 2D canvas (premultiplied, linear, clamped); pass the old one to reuse it
+    function texture(src, old) {
+      const t = old || gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return t;
+    }
+    // put the canvas in a part's positioned parent, at x, y (that parent's points), w × h, with p device pixels a point
+    function attach(host, x, y, w, h, p) {
+      start();
+      if (cv.parentElement !== host) host.append(cv);
+      const st = cv.style;
+      st.left = x + 'px';
+      st.top = y + 'px';
+      st.width = w + 'px';
+      st.height = h + 'px';
+      px = p;
+      const W = Math.round(w * p), Hh = Math.round(h * p);
+      if (cv.width !== W) cv.width = W;
+      if (cv.height !== Hh) cv.height = Hh;
+      H = h;
+    }
+    const show = (on) => cv && cv.classList.toggle('pk-on', !!on);
+    // one draw: set(gl, uniforms) fills in the uniforms, then one triangle covers the canvas
+    function draw(name, set) {
+      const P = progs[name];
+      if (!P || !ok()) return false;
+      gl.useProgram(P.p);
+      gl.viewport(0, 0, cv.width, cv.height);
+      set(gl, P.u);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      last = { name, set };
+      stats.draws++;
+      stats.frameDraws++;
+      return true;
+    }
+    // the colours drawn in a box (canvas points, w × h of them), redrawn now so they can be read: rows from the top,
+    // each point [r, g, b, a] from 0 to 255 (premultiplied)
+    function read(x, y, w, h) {
+      w = Math.max(1, Math.round(w || 1));
+      h = Math.max(1, Math.round(h || 1));
+      if (!last || !ok()) return null;
+      const P = progs[last.name];
+      gl.useProgram(P.p);
+      gl.viewport(0, 0, cv.width, cv.height);
+      last.set(gl, P.u);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      const out = [];
+      const W = Math.round(w * px), Hh = Math.round(h * px), buf = new Uint8Array(W * Hh * 4);
+      gl.readPixels(Math.round(x * px), Math.round((H - y - h) * px), W, Hh, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+      // one sample per point, from the middle of its device pixels; WebGL's rows run from the bottom
+      for (let j = 0; j < h; j++) {
+        const row = [];
+        for (let i = 0; i < w; i++) {
+          const bx = Math.min(W - 1, Math.floor((i + 0.5) * px)), by = Math.min(Hh - 1, Math.floor((h - j - 0.5) * px)), k = (by * W + bx) * 4;
+          row.push([buf[k], buf[k + 1], buf[k + 2], buf[k + 3]]);
+        }
+        out.push(row);
+      }
+      return out;
+    }
+    // the time a part's frame took (ms), counted once a frame
+    function frame(ms) {
+      stats.frames++;
+      stats.sum += ms;
+      if (ms > stats.max) stats.max = ms;
+      if (stats.frameDraws > stats.worst) stats.worst = stats.frameDraws;
+      stats.frameDraws = 0;
+    }
+    return {
+      get ok() {
+        return ok();
+      },
+      get canvas() {
+        start();
+        return cv;
+      },
+      gl: () => (ok() ? gl : null),
+      program,
+      texture,
+      attach,
+      show,
+      draw,
+      read,
+      frame,
+      // frames drawn, draws, the average and longest frame (ms) and the most draws in one frame; reset: true starts again
+      stats(o) {
+        const r = { frames: stats.frames, draws: stats.draws, avg: stats.frames ? +(stats.sum / stats.frames).toFixed(3) : 0, max: +stats.max.toFixed(3), worst: stats.worst };
+        if (o && o.reset) Object.assign(stats, { frames: 0, draws: 0, sum: 0, max: 0, frameDraws: 0, worst: 0 });
+        return r;
+      },
+    };
+  })();
+
+  /* ============================================================================================================
+     (4) THE LIQUID GLASS BUBBLE (tabBar.bubble, 1.4). While a finger is on the tab bar, a separate glass bubble
+     rides on top of it and follows the finger. Icons under it turn the accent colour where it covers them (half an
+     icon under it is half accent) and never bend or grow: only a thin band at the bubble's rim bends what's under it.
+     The bar swells while touched and stretches from an anchor that sits across the bar from the finger; dragging up
+     raises its top edge. A fast drag squashes the bubble flat and wide, and it bounces back taller and narrower.
+     How it's drawn: one WebGL canvas over the bar (36 pt around it), shown only while the bubble is up; the tabs'
+     icons and labels are drawn once into a picture (normal and accent copies), and each frame is one draw. Nothing
+     that moves uses backdrop-filter. Every number is a named value (--pk-bubble-…, parts-kit.css) and the springs are
+     the kit's named bubble springs, so an app or one bar can differ, and Parts.differences() lists it.
+     Reduce Motion: no jiggle, swell, stretch, rise or moving anchor; it appears and travels on the short fade.
+     Reduce transparency or no WebGL: the CSS bubble (on top, partial recolour, no bending), solid with Reduce
+     transparency. No bubble while the bar is folded or searching. tabBar.bubble: false gives 1.3's highlight back.
+     ============================================================================================================ */
+  const PAD = 36;
+  // [key, named value, default, kind (px, ms, n, deg), shader uniform]
+  const BV = [
+    ['bubw', 'width', 27, 'px'], ['bubh', 'height', 3.5, 'px'],
+    ['jfast', 'squash-at', 130, 'n'], ['jsq', 'squash-time', 340, 'ms'], ['jdel', 'jiggle-delay', 20, 'ms'], ['jresp', 'jiggle-time', 400, 'ms'],
+    ['jdamp', 'jiggle-damping', 0.33, 'n'], ['jhmin', 'height-min', 6, 'px'], ['jhmax', 'height-max', 8.8, 'px'], ['jwmax', 'width-max', 10, 'px'], ['jwmin', 'width-min', 7.8, 'px'],
+    ['band', 'band', 13, 'px', 'uBand'], ['str', 'strength', 4.5, 'px', 'uStr'], ['fall', 'fade', 1.65, 'n', 'uFall'], ['fringe', 'fringe', 0, 'n', 'uFringe'],
+    ['rings', 'rings', 3, 'n', 'uRings'], ['space', 'ring-spacing', 1, 'n', 'uSpace'], ['steps', 'ring-steps', 0.09, 'n', 'uSteps'], ['rep', 'ring-repeat', 0, 'n', 'uRep'],
+    ['mag', 'magnify', 0.06, 'n', 'uMag'], ['flip', 'flip', 0.1, 'n', 'uFlip'], ['lines', 'ring-lines', 0, 'n', 'uLines'], ['ringfr', 'ring-fringe', 0.14, 'n', 'uRingFr'],
+    ['ltop', 'light', 0.5, 'n', 'uLTop'], ['lbot', 'light-far', 0.28, 'n', 'uLBot'], ['lside', 'light-all', 0.12, 'n', 'uLSide'], ['lthick', 'light-width', 0, 'px', 'uLThick'],
+    ['loff', 'light-inset', 0.15, 'px', 'uLOff'], ['lsoft', 'light-soft', 2.6, 'px', 'uLSoft'], ['lang', 'light-angle', 188, 'deg', 'uLAng'], ['lspread', 'light-spread', 4.6, 'n', 'uLSpread'],
+    ['glow', 'glow', 0.08, 'n', 'uGlow'], ['glowsp', 'glow-spread', 2.5, 'px', 'uGlowSp'], ['dark', 'dark-edge', 0.16, 'n', 'uDark'], ['darkw', 'dark-edge-width', 0.7, 'px', 'uDarkW'],
+    ['blur', 'blur', 0, 'px', 'uBlur'], ['eblur', 'edge-blur', 1.45, 'px', 'uEBlur'], ['frost', 'frost', 0.15, 'n', 'uFrost'], ['over', 'overhang', 0.9, 'n', 'uOver'],
+    ['follow', 'lean', 0, 'n'], ['edge', 'pull', 0.35, 'n'], ['maxs', 'shift', 0, 'px'], ['stretch', 'stretch', 3, 'n'], ['squash', 'thin', 0, 'n'],
+    ['ax', 'anchor-x', 0.43, 'n'], ['alag', 'anchor-lag', 140, 'ms'], ['afy', 'anchor-follow-y', 0, 'n'], ['amin', 'anchor-min', 0.42, 'n'], ['amax', 'anchor-max', 0.61, 'n'], ['ay', 'anchor-y', 1, 'n'],
+    ['vfol', 'rise', 0.27, 'n'], ['vmax', 'rise-max', 3, 'px'], ['ubot', 'rise-bottom', 0.29, 'n'], ['uside', 'rise-spread', 0, 'n'], ['blift', 'rise-extra', 0, 'n'],
+    ['swW', 'swell-width', 18.6, 'px'], ['swH', 'swell-height', 1.2, 'px'], ['resp', 'bar-time', 400, 'ms'], ['damp', 'bar-damping', 1, 'n'],
+    ['ipsw', 'icon-swell', 0, 'n'], ['ipy', 'icon-swell-y', 0, 'n'], ['ride', 'icon-ride', 1, 'n'], ['ish', 'icon-rise', 0.5, 'n'], ['isw', 'icon-spread', 0, 'n'], ['iay', 'icon-rise-y', 0.84, 'n'],
+    ['tap', 'tap', 120, 'ms'], ['orun', 'overrun', 20, 'px'], ['orate', 'overrun-rate', 0.35, 'n'],
+  ].map((r) => ({ k: r[0], name: '--pk-bubble-' + r[1], v: r[2], kind: r[3], u: r[4] }));
+  const BUBBLE_SPRINGS = { liftIn: 'bubble-in', liftOut: 'bubble-out', swellIn: 'bubble-swell', swellOut: 'bubble-unswell', follow: 'bubble-follow', travel: 'bubble-travel', snap: 'bubble-snap' };
+  function bubbleValues(el) {
+    const cs = getComputedStyle(el), V = {};
+    BV.forEach((d) => {
+      const raw = cs.getPropertyValue(d.name).trim();
+      let n = parseFloat(raw);
+      if (!isFinite(n)) n = d.v;
+      else if (d.kind === 'ms' && /\ds$/.test(raw) && !/ms$/.test(raw)) n *= 1000;
+      V[d.k] = n;
+    });
+    return V;
+  }
+
+  const BUBBLE_FS = [
+    '#version 300 es', 'precision highp float;',
+    'uniform sampler2D uA;uniform vec2 uRes,uSize;uniform float uDpr,uAH,uLift,uN;uniform vec4 uBar,uBub,uRest;uniform vec3 uTint,uOverC;out vec4 o;',
+    'uniform float uBand,uStr,uFall,uFringe,uRings,uSpace,uSteps,uRep,uMag,uFlip,uLines,uRingFr,uBlur,uEBlur,uFrost,uOver;',
+    'uniform float uLTop,uLBot,uLSide,uLThick,uLOff,uLSoft,uLAng,uLSpread,uGlow,uGlowSp,uDark,uDarkW;',
+    'uniform vec4 uIW,uIP;uniform vec2 uITab,uIK;uniform float uIDy,uIMode;',
+    // the drag-up icon stretch (each icon round its own centre, or the whole row round the anchor), then the press
+    'vec2 iw(vec2 p){float ax=uIW.x;if(uIMode<.5){float i=clamp(floor((p.x-uITab.x)/uITab.y),0.,uN-1.);ax=uITab.x+(i+.5)*uITab.y;}p=vec2(ax+(p.x-ax)/uIW.z,uIW.y+uIDy+(p.y-uIW.y)/uIW.w);',
+    ' p=uIP.xy+(p-uIP.xy)/uIP.zw;float j=clamp(floor((p.x-uITab.x)/uITab.y),0.,uN-1.);vec2 c=vec2(uITab.x+(j+.5)*uITab.y,uIK.y);return c+(p-c)/uIK.x;}',
+    'float pill(vec2 p,vec4 s){float r=min(s.z,s.w);vec2 q=abs(p-s.xy)-s.zw+vec2(r);return length(max(q,0.))+min(max(q.x,q.y),0.)-r;}',
+    // the icon picture: row 0 in the normal colour, row 1 in the accent colour
+    'vec4 ic(vec2 p,float row){p=iw(p);if(p.x<0.||p.y<0.||p.x>uSize.x||p.y>uSize.y)return vec4(0.);return texture(uA,vec2(p.x/uSize.x,(p.y+row*(uSize.y+4.))/uAH));}',
+    'vec4 bic(vec2 q,float r){if(r<.05)return ic(q,1.);vec4 s=ic(q,1.)*.2;for(int i=0;i<8;i++){float a=float(i)*.785398;vec2 d=vec2(cos(a),sin(a));s+=ic(q+d*r,1.)*.06+ic(q+d*r*.5,1.)*.04;}return s;}',
+    'void main(){',
+    ' vec2 p=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y)/uDpr;',
+    ' float d=pill(p,uBub);',
+    ' float n=max(-d,0.),B=max(uBand,.01),t=clamp(1.-n/B,0.,1.),R=max(uRings,1.),u=pow(t,uSpace),uR=u*R,fw=max(fwidth(uR),1e-4);',
+    ' vec4 base=ic(p,0.);',
+    ' if(d>14.){o=base;return;}',
+    ' float L=clamp(uLift,0.,1.);',
+    ' float sh=0.09*L*exp(-max(pill(p-vec2(0.,3.),uBub),0.)/5.);',
+    ' vec4 outside=base+vec4(0.,0.,0.,sh)*(1.-base.a);',
+    ' float aa=1.2/uDpr;',
+    ' if(d>aa){o=outside;return;}',
+    ' float h=.5;vec2 g=vec2(pill(p+vec2(h,0.),uBub)-pill(p-vec2(h,0.),uBub),pill(p+vec2(0.,h),uBub)-pill(p-vec2(0.,h),uBub))/(2.*h);',
+    ' float inB=step(.0001,t);',
+    // the Fresnel profile: a smooth fade, cut into rings (steps), with an optional ramp inside each ring (repeat)
+    ' float w=pow(t,uFall);',
+    ' float idx=floor(min(uR,R-.001)),fr=uR-idx;',
+    ' float wq=pow(pow((idx+1.)/R,1./uSpace),uFall);',
+    ' float ws=mix(w,wq,uSteps);',
+    ' float wf=mix(ws,wq*(.25+1.5*fr),uRep)*inB*L;',
+    ' float fl=uFlip*B;vec2 pf=p;if(n<fl)pf=p-g*(2.*(fl-n))*L;',
+    ' vec2 c=uBub.xy;vec2 q=c+(pf-c)/(1.+uMag*wf);',
+    ' vec2 off=-g*uStr*wf;',
+    ' float f=uFringe*wf+uRingFr*fr*wq*inB*L;',
+    ' float rb=uBlur*L+uEBlur*wf;',
+    ' vec4 cr=bic(q+off*(1.+f),rb),cg=bic(q+off,rb),cb=bic(q+off*(1.-f),rb);',
+    ' vec4 icon=vec4(cr.r,cg.g,cb.b,max(cg.a,max(cr.a,cb.a)));',
+    // the body: the picked tab's resting fill turns into frosted glass; where it hangs off the bar it's frosted more
+    ' float ob=smoothstep(-.5,.5,pill(p,uBar))*L;',
+    ' vec4 body=mix(uRest,vec4(uTint*uFrost,uFrost),L);',
+    ' body=mix(body,vec4(uOverC*uOver,uOver),ob);',
+    ' vec4 col=icon+body*(1.-icon.a);',
+    ' float near=floor(uR+.5);float ld=abs(uR-near)/fw;',
+    ' float ln2=uLines*L*inB*(1.-smoothstep(.5,1.5,ld))*step(.5,near)*step(near,R-.5);',
+    ' col=vec4(ln2)+col*(1.-ln2);',
+    // the rim light: a line of set thickness and softness, moved in from the edge, brightest where the light hits
+    ' vec2 up=normalize(vec2(g.x,-g.y)+1e-5);',
+    ' float la=radians(uLAng);vec2 ld2=vec2(cos(la),sin(la));',
+    ' float kT=pow(max(dot(up,ld2),0.),uLSpread),kB=pow(max(dot(up,-ld2),0.),uLSpread);',
+    ' float hw=uLThick*.5,sf=max(uLSoft,.5/uDpr);',
+    ' float prof=(1.-smoothstep(hw,hw+sf,abs(n-(uLOff+hw))))*step(.001,uLThick+uLSoft);',
+    ' float glw=uGlow*kT*exp(-max(n-uLOff,0.)/max(uGlowSp,.1))*step(uLOff-.5,n);',
+    ' float lt=clamp(L*(prof*(uLSide+uLTop*kT+uLBot*kB)+glw),0.,1.);',
+    ' col=vec4(lt)+col*(1.-lt);',
+    ' float ln=L*uDark*(1.-smoothstep(0.,max(uDarkW,.05),n))*(1.-.7*abs(up.y));',
+    ' col=vec4(0.,0.,0.,ln)+col*(1.-ln);',
+    ' o=mix(col,outside,smoothstep(-aa,aa,d));',
+    '}',
+  ].join('\n');
+  const BUBBLE_U = ['uA', 'uRes', 'uSize', 'uDpr', 'uAH', 'uLift', 'uN', 'uBar', 'uBub', 'uRest', 'uTint', 'uOverC', 'uIW', 'uIP', 'uITab', 'uIK', 'uIDy', 'uIMode'].concat(BV.filter((d) => d.u).map((d) => d.u));
+
+  // a spring as iOS describes it, stepped at 240+ steps a second (and 4+ a radian) so it stays stable at any setting;
+  // tween() is the Reduce Motion form: a straight ease over a fixed time
+  function Spring(v) {
+    this.v = v;
+    this.t = v;
+    this.vel = 0;
+    this.k = 400;
+    this.c = 40;
+    this.tw = null;
+  }
+  Spring.prototype.to = function (t, s) {
+    this.tw = null;
+    this.t = t;
+    const w = 2 * Math.PI * s.f;
+    this.k = w * w;
+    this.c = 2 * s.z * w;
+  };
+  Spring.prototype.tween = function (t, ms) {
+    if (this.tw && this.t === t) return;
+    this.t = t;
+    this.vel = 0;
+    this.tw = ms > 0 ? { from: this.v, e: 0, ms } : null;
+    if (!this.tw) this.v = t;
+  };
+  Spring.prototype.jump = function (t) {
+    this.v = this.t = t;
+    this.vel = 0;
+    this.tw = null;
+  };
+  Spring.prototype.step = function (dt, instant) {
+    if (instant) return this.jump(this.t);
+    if (this.tw) {
+      this.tw.e += dt * 1000;
+      const k = Math.min(1, this.tw.e / this.tw.ms);
+      this.v = this.tw.from + (this.t - this.tw.from) * (1 - (1 - k) * (1 - k));
+      if (k >= 1) this.tw = null;
+      return;
+    }
+    const n = Math.max(1, Math.ceil(dt * Math.max(240, 4 * Math.sqrt(this.k)))), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      this.vel += (-this.k * (this.v - this.t) - this.c * this.vel) * h;
+      this.v += this.vel * h;
+    }
+  };
+  Spring.prototype.still = function () {
+    return !this.tw && Math.abs(this.v - this.t) < 0.002 && Math.abs(this.vel) < 0.05;
+  };
+  // the rubber band iOS uses at limits
+  const band = (v, max) => (max <= 0 ? 0 : Math.sign(v) * max * (1 - 1 / ((Math.abs(v) * 0.55) / max + 1)));
+
+  /* the icon picture: each tab's icon, label and badge, drawn into one 2D canvas twice (normal, then accent), in the
+     canvas's points. Drawn straight from the SVG shapes (paths, circles, rects, lines, polygons) with their own
+     styles, so it's ready at once with no image loading; paint that is the icon's own colour takes the row's colour. */
+  function svgShape(el) {
+    const a = (n) => parseFloat(el.getAttribute(n)) || 0;
+    const p = new Path2D();
+    switch (el.localName) {
+      case 'path':
+        return new Path2D(el.getAttribute('d') || '');
+      case 'circle':
+        p.arc(a('cx'), a('cy'), a('r'), 0, 2 * Math.PI);
+        return p;
+      case 'ellipse':
+        p.ellipse(a('cx'), a('cy'), a('rx'), a('ry'), 0, 0, 2 * Math.PI);
+        return p;
+      case 'rect': {
+        const x = a('x'), y = a('y'), w = a('width'), h = a('height');
+        let rx = el.hasAttribute('rx') ? a('rx') : a('ry'), ry = el.hasAttribute('ry') ? a('ry') : rx;
+        rx = Math.min(rx, w / 2);
+        ry = Math.min(ry, h / 2);
+        if (!rx && !ry) p.rect(x, y, w, h);
+        else {
+          p.moveTo(x + rx, y);
+          p.lineTo(x + w - rx, y);
+          p.ellipse(x + w - rx, y + ry, rx, ry, 0, -Math.PI / 2, 0);
+          p.lineTo(x + w, y + h - ry);
+          p.ellipse(x + w - rx, y + h - ry, rx, ry, 0, 0, Math.PI / 2);
+          p.lineTo(x + rx, y + h);
+          p.ellipse(x + rx, y + h - ry, rx, ry, 0, Math.PI / 2, Math.PI);
+          p.lineTo(x, y + ry);
+          p.ellipse(x + rx, y + ry, rx, ry, 0, Math.PI, 1.5 * Math.PI);
+          p.closePath();
+        }
+        return p;
+      }
+      case 'line':
+        p.moveTo(a('x1'), a('y1'));
+        p.lineTo(a('x2'), a('y2'));
+        return p;
+      case 'polyline':
+      case 'polygon': {
+        const n = (el.getAttribute('points') || '').trim().split(/[\s,]+/).map(Number);
+        for (let i = 0; i + 1 < n.length; i += 2) i ? p.lineTo(n[i], n[i + 1]) : p.moveTo(n[i], n[i + 1]);
+        if (el.localName === 'polygon') p.closePath();
+        return p;
+      }
+    }
+    return null;
+  }
+  function paintSvg(x, svg, box, col, alpha) {
+    const vb = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width ? svg.viewBox.baseVal : { x: 0, y: 0, width: box.w, height: box.h };
+    x.save();
+    x.translate(box.x, box.y);
+    x.scale(box.w / vb.width, box.h / vb.height);
+    x.translate(-vb.x, -vb.y);
+    const walk = (parent, op) => {
+      Array.from(parent.children).forEach((el) => {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return;
+        const o = op * (parseFloat(cs.opacity) || (cs.opacity === '0' ? 0 : 1));
+        if (el.localName === 'g' || el.localName === 'a') return walk(el, o);
+        const sh = svgShape(el);
+        if (!sh) return;
+        const own = cs.color;
+        const paint = (v) => (v === own || /^url\(/.test(v) ? col : v);
+        if (cs.fill && cs.fill !== 'none') {
+          x.globalAlpha = alpha * o * (parseFloat(cs.fillOpacity) || 0);
+          x.fillStyle = paint(cs.fill);
+          x.fill(sh, cs.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
+        }
+        const sw = parseFloat(cs.strokeWidth) || 0;
+        if (cs.stroke && cs.stroke !== 'none' && sw > 0) {
+          x.globalAlpha = alpha * o * (parseFloat(cs.strokeOpacity) || 0);
+          x.strokeStyle = paint(cs.stroke);
+          x.lineWidth = sw;
+          x.lineCap = cs.strokeLinecap || 'butt';
+          x.lineJoin = cs.strokeLinejoin || 'miter';
+          x.miterLimit = parseFloat(cs.strokeMiterlimit) || 4;
+          x.stroke(sh);
+        }
+      });
+    };
+    walk(svg, 1);
+    x.restore();
+    x.globalAlpha = 1;
+  }
+  // what the picture depends on: when any of it changes, the picture is made again (never while the bubble is up)
+  function pictureKey(b) {
+    const cs = getComputedStyle(b.bar), t0 = b.tabs[0], ts = t0 ? getComputedStyle(t0) : cs;
+    const sel = b.tabs.findIndex((t) => t.classList.contains('on'));
+    return [b.L.bw, b.L.bh, b.px, cs.getPropertyValue('--fg'), cs.getPropertyValue('--accent'), cs.getPropertyValue('--pk-rest'), ts.font, ts.color, sel,
+      b.tabs.map((t) => t.innerHTML.length + ':' + t.textContent + ':' + t.offsetWidth).join('|')].join('¦');
+  }
+  function buildPicture(b) {
+    const L = b.L, W = L.cw, H = L.ch, px = b.px;
+    const c = b.pic || doc.createElement('canvas');
+    c.width = Math.round(W * px);
+    c.height = Math.round((2 * H + 4) * px);
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.setTransform(px, 0, 0, px, 0, 0);
+    x.clearRect(0, 0, W, 2 * H + 4);
+    const cs = getComputedStyle(b.bar), fg = cs.getPropertyValue('--fg').trim() || '#000', ac = cs.getPropertyValue('--accent').trim() || '#007aff';
+    const br = b.bar.getBoundingClientRect(), s = b.s;
+    // a box in canvas points, from the bar's own (untransformed) layout
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: (r.left - br.left) / s + PAD, y: (r.top - br.top) / s + PAD, w: r.width / s, h: r.height / s };
+    };
+    [fg, ac].forEach((col, row) => {
+      x.save();
+      x.translate(0, row * (H + 4));
+      b.tabs.forEach((t) => {
+        const svg = t.querySelector('svg');
+        if (svg) paintSvg(x, svg, box(svg), col, 1);
+        t.querySelectorAll(':scope > span:not(.pk-badge)').forEach((sp) => {
+          const st = getComputedStyle(sp), bx = box(sp);
+          x.font = st.fontStyle + ' ' + st.fontWeight + ' ' + st.fontSize + ' ' + st.fontFamily;
+          x.fillStyle = col;
+          x.textBaseline = 'alphabetic';
+          let text = sp.textContent.trim();
+          if (x.measureText(text).width > bx.w + 0.5) {
+            while (text.length > 1 && x.measureText(text + '…').width > bx.w) text = text.slice(0, -1);
+            text += '…';
+          }
+          const m = x.measureText(text), asc = m.fontBoundingBoxAscent || parseFloat(st.fontSize) * 0.8, desc = m.fontBoundingBoxDescent || parseFloat(st.fontSize) * 0.2;
+          x.fillText(text, bx.x + (bx.w - m.width) / 2, bx.y + (bx.h + asc - desc) / 2);
+        });
+        // (19) a badge on a tab keeps its own colours in both copies
+        t.querySelectorAll('.pk-badge').forEach((bd) => {
+          const st = getComputedStyle(bd), bx = box(bd), r = Math.min(bx.h / 2, parseFloat(st.borderTopLeftRadius) || 0);
+          const p = new Path2D();
+          p.moveTo(bx.x + r, bx.y);
+          p.arcTo(bx.x + bx.w, bx.y, bx.x + bx.w, bx.y + bx.h, r);
+          p.arcTo(bx.x + bx.w, bx.y + bx.h, bx.x, bx.y + bx.h, r);
+          p.arcTo(bx.x, bx.y + bx.h, bx.x, bx.y, r);
+          p.arcTo(bx.x, bx.y, bx.x + bx.w, bx.y, r);
+          x.fillStyle = st.backgroundColor;
+          x.fill(p);
+          x.font = st.fontStyle + ' ' + st.fontWeight + ' ' + st.fontSize + ' ' + st.fontFamily;
+          x.fillStyle = st.color;
+          x.textAlign = 'center';
+          x.textBaseline = 'middle';
+          x.fillText(bd.textContent.trim(), bx.x + bx.w / 2, bx.y + bx.h / 2 + 0.5);
+          x.textAlign = 'start';
+        });
+      });
+      x.restore();
+    });
+    b.pic = c;
+    b.tex = lens.texture(c, b.tex);
+    b.picKey = b.key;
+  }
+
+  const bubbles = new WeakMap();
+  const liveBubbles = new Set();
+  let bubbleRaf = 0, bubbleLast = 0;
+  const bubbleWanted = (bar) => {
+    if (!S.tabBar.bubble.on || !bar.classList.contains('pk-tabbar')) return false;
+    const dock = bar.closest('.pk-dock');
+    return !(dock && (dock.classList.contains('pk-folded') || dock.classList.contains('pk-searching')));
+  };
+  // start the lens with the first tab bar the page shows, so the choice of WebGL or CSS is made once, up front
+  let lensChosen = null;
+  function chooseLens() {
+    if (lensChosen === null) lensChosen = lens.program('bubble', BUBBLE_FS, BUBBLE_U);
+    return lensChosen;
+  }
+  function bubbleOf(bar) {
+    let b = bubbles.get(bar);
+    if (!b) {
+      b = { bar, live: false, X: new Spring(0), LIFT: new Spring(0), SWELL: new Spring(0), PUFF: new Spring(1), BX: new Spring(0), BY: new Spring(0), SX: new Spring(0), AX: new Spring(0), AY: new Spring(0), ANC: { x: 0, y: 0 }, JG: { t: 1, at: 0 }, drag: null, drop: null, held: false, tex: null, pic: null, picKey: '' };
+      bubbles.set(bar, b);
+    }
+    return b;
+  }
+  const slot = (b, i) => b.L.slots[Math.max(0, Math.min(b.L.slots.length - 1, i))];
+  const nearSlot = (b, x) => {
+    let k = 0, kd = 1e9;
+    b.L.slots.forEach((c, i) => {
+      if (Math.abs(c - x) < kd) {
+        kd = Math.abs(c - x);
+        k = i;
+      }
+    });
+    return k;
+  };
+  const springFor = (b, k) => {
+    const E2 = motion.springs(), n = motion.springOf(BUBBLE_SPRINGS[k], b.bar);
+    return E2[n] || E2[BUBBLE_SPRINGS[k]];
+  };
+  const stiff = (time, damping) => ({ z: Math.min(1, Math.max(0.05, damping)), f: 1 / Math.max(0.02, time / 1000) });
+  // the bar's layout, measured while it isn't moving (transforms don't change offsets, so it can be read any time)
+  function measure(b) {
+    const bar = b.bar;
+    b.tabs = itemsOf(bar);
+    b.s = scaleOf(bar);
+    b.px = Math.min(window.devicePixelRatio || 1, 3) * b.s;
+    const L = { bw: bar.offsetWidth, bh: bar.offsetHeight, bx: bar.offsetLeft, by: bar.offsetTop };
+    L.slots = b.tabs.map((t) => t.offsetLeft + t.offsetWidth / 2);
+    L.tw = b.tabs.length ? b.tabs[0].offsetWidth : L.bw;
+    L.th = b.tabs.length ? b.tabs[0].offsetHeight : L.bh - 8;
+    L.t0 = b.tabs.length ? b.tabs[0].offsetLeft : 4;
+    L.cw = L.bw + 2 * PAD;
+    L.ch = L.bh + 2 * PAD;
+    b.L = L;
+    b.host = bar.offsetParent || bar.parentElement;
+  }
+  function selIndex(b) {
+    const i = b.tabs.findIndex((t) => t.classList.contains('on'));
+    return i < 0 ? 0 : i;
+  }
+  function cssLayers(b, on) {
+    if (!on) {
+      (b.css || []).forEach((el) => el.remove());
+      b.css = null;
+      return;
+    }
+    if (b.css) return;
+    const mk = (cls) => {
+      const r = doc.createElement('div');
+      r.className = cls;
+      r.setAttribute('aria-hidden', 'true');
+      r.inert = true;
+      return r;
+    };
+    const bub = mk('pk-bubble-css');
+    bub.dataset.name = 'Bubble';
+    const rowN = mk('pk-bubble-row'), rowA = mk('pk-bubble-row pk-accent');
+    [rowN, rowA].forEach((r) => {
+      b.tabs.forEach((t) => {
+        const c = t.cloneNode(true);
+        c.removeAttribute('data-name');
+        c.removeAttribute('id');
+        c.tabIndex = -1;
+        c.classList.remove('pk-under');
+        r.append(c);
+      });
+      r.style.width = b.L.bw + 'px';
+      r.style.height = b.L.bh + 'px';
+    });
+    b.host.append(bub, rowN, rowA);
+    b.css = [bub, rowN, rowA];
+    const cs = getComputedStyle(b.bar);
+    b.cssFill = [parseRGBA(cs.getPropertyValue('--pk-rest')), parseRGBA(cs.getPropertyValue(b.solid ? '--pk-bubble-solid' : '--pk-bubble-css'))];
+  }
+  function parseRGBA(v) {
+    const ctx = parseRGBA.c || (parseRGBA.c = doc.createElement('canvas').getContext('2d'));
+    ctx.fillStyle = '#000';
+    ctx.fillStyle = (v || '').trim() || 'transparent';
+    const s = ctx.fillStyle;
+    if (s[0] === '#') return [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16), 1];
+    const m = s.match(/[\d.]+/g) || [0, 0, 0, 0];
+    return [+m[0], +m[1], +m[2], m[3] == null ? 1 : +m[3]];
+  }
+  // a finger lands on a bar with the bubble on
+  function bubbleDown(bar, ev) {
+    const b = bubbleOf(bar);
+    liveBubbles.forEach((o) => o !== b && bubbleEnd(o));
+    if (!b.live) {
+      measure(b);
+      b.V = bubbleValues(bar);
+      b.modes = Object.assign({}, S.tabBar.bubble);
+      b.solid = !!bar.closest('.glass-solid');
+      b.gl = chooseLens() && !b.solid && lens.ok;
+      b.reduced = motion.reduced();
+      b.origin = bar.getBoundingClientRect();
+      if (b.gl) {
+        b.key = pictureKey(b);
+        if (b.key !== b.picKey) buildPicture(b);
+        const cs = getComputedStyle(bar);
+        b.colors = { rest: parseRGBA(cs.getPropertyValue('--pk-rest')), tint: parseRGBA(cs.getPropertyValue('--pk-bubble-tint')), over: parseRGBA(cs.getPropertyValue('--pk-bubble-over-tint')) };
+      }
+      b.AX.jump(b.L.bw * b.V.ax);
+      b.AY.jump(b.L.bh * b.V.ay);
+      b.ANC = { x: b.L.bw * b.V.ax, y: b.L.bh * b.V.ay };
+    }
+    const x = (ev.clientX - b.origin.left) / b.s, y = (ev.clientY - b.origin.top) / b.s;
+    const tap = nearSlot(b, x);
+    b.drag = { id: ev.pointerId, x0: x, moved: false, tap, t0: performance.now(), fx: x, fy: y, fx0: x, fy0: y, touch: x };
+    b.drop = null;
+    if (b.modes.anchor === 'follow' && !b.reduced) b.AX.jump(fxA(b, x));
+    if (!b.live) {
+      b.X.jump(slot(b, selIndex(b)));
+      bubbleStart(b);
+    }
+    const r = b.reduced;
+    r ? b.LIFT.tween(1, dur('--dur-reduced', bar)) : b.LIFT.to(1, springFor(b, 'liftIn'));
+    if (!r) b.SWELL.to(1, springFor(b, 'swellIn'));
+    if (tap !== selIndex(b) || Math.abs(b.X.t - slot(b, tap)) > 1) r ? b.X.tween(slot(b, tap), dur('--dur-reduced', bar)) : b.X.to(slot(b, tap), springFor(b, 'travel'));
+  }
+  function bubbleMove(b, ev) {
+    const d = b.drag;
+    if (!d) return;
+    let e = ev;
+    if (ev.getPredictedEvents) {
+      const p = ev.getPredictedEvents();
+      if (p && p.length) e = p[0];
+    } else if (ev.getCoalescedEvents) {
+      const c = ev.getCoalescedEvents();
+      if (c && c.length) e = c[c.length - 1];
+    }
+    d.fx = (e.clientX - b.origin.left) / b.s;
+    d.fy = (ev.clientY - b.origin.top) / b.s;
+    if (!d.moved && Math.abs(d.fx - d.x0) < N.tap && Math.abs(d.fy - d.fy0) < N.tap) return;
+    d.moved = true;
+  }
+  // the finger lifts: a drag lands on the nearest tab, a tap travels to the tapped one; the pick changes now
+  function bubbleUp(b, ev) {
+    const d = b.drag;
+    if (!d) return;
+    const cur = selIndex(b);
+    const i = ev.type === 'pointercancel' && !d.moved ? cur : d.moved ? nearSlot(b, b.X.t) : d.tap;
+    if (b.reduced) b.X.tween(slot(b, i), dur('--dur-reduced', b.bar));
+    else b.X.to(slot(b, i), springFor(b, d.moved ? 'snap' : 'travel'));
+    b.drop = { i, after: d.t0 + b.V.tap };
+    b.drag = null;
+    selectBar(b.bar, i);
+    b.tabs = itemsOf(b.bar);
+  }
+  function fxA(b, x) {
+    let u = Math.max(0, Math.min(1, x / b.L.bw));
+    if (b.modes.invert) u = 1 - u;
+    const lo = Math.min(b.V.amin, b.V.amax), hi = Math.max(b.V.amin, b.V.amax);
+    return b.L.bw * (lo + (hi - lo) * u);
+  }
+  function clampX(b, x) {
+    const lo = b.L.slots[0] - 8, hi = b.L.slots[b.L.slots.length - 1] + 8, V = b.V;
+    if (x < lo) return lo - Math.min(V.orun, (lo - x) * V.orate);
+    if (x > hi) return hi + Math.min(V.orun, (x - hi) * V.orate);
+    return x;
+  }
+  function bubbleStart(b) {
+    b.live = true;
+    liveBubbles.add(b);
+    b.JG = { t: 1, at: 0 };
+    b.PUFF.jump(1);
+    if (b.gl) {
+      const L = b.L;
+      lens.attach(b.host, L.bx - PAD, L.by - PAD, L.cw, L.ch, b.px);
+    } else cssLayers(b, true);
+    if (!bubbleRaf) {
+      bubbleLast = performance.now();
+      bubbleRaf = requestAnimationFrame(bubbleFrame);
+    }
+  }
+  function bubbleEnd(b) {
+    b.live = false;
+    liveBubbles.delete(b);
+    b.drag = b.drop = null;
+    b.bar.classList.remove('pk-bubbling');
+    b.bar.style.removeProperty('transform');
+    b.bar.style.removeProperty('transform-origin');
+    if (b.gl) {
+      lens.show(false);
+      lens.canvas.style.removeProperty('transform');
+    }
+    cssLayers(b, false);
+    [b.X, b.LIFT, b.SWELL, b.BX, b.BY, b.SX].forEach((sp) => sp.jump(sp.t));
+    b.LIFT.jump(0);
+    b.SWELL.jump(0);
+    b.BX.jump(0);
+    b.BY.jump(0);
+    b.SX.jump(0);
+    if (b.key !== pictureKey(b)) b.picKey = ''; // made again on the next touch
+    emit(b.bar, 'bubble', { up: false });
+  }
+  function bubbleFrame(now) {
+    bubbleRaf = 0;
+    const real = Math.min(0.05, (now - bubbleLast) / 1000);
+    bubbleLast = now;
+    liveBubbles.forEach((b) => {
+      const t0 = performance.now();
+      const sp = motion.speed();
+      bubbleTick(b, sp > 0 ? real / sp : 0, now);
+      if (b.gl) lens.frame(performance.now() - t0);
+    });
+    if (liveBubbles.size) bubbleRaf = requestAnimationFrame(bubbleFrame);
+  }
+  // one frame: the bar's motion, the springs, the drop, then the transforms and the one draw
+  function bubbleTick(b, dt, now) {
+    const V = b.V, L = b.L, d = b.drag, instant = motion.speed() <= 0, r = b.reduced;
+    // the bar follows the drag
+    const barSp = stiff(V.resp, V.damp);
+    let pull = 0, lift = 0;
+    if (d && d.moved) {
+      const want = d.fx - b.BX.v, lo = L.slots[0] - 8, hi = L.slots[L.slots.length - 1] + 8, ex = want > hi ? want - hi : want < lo ? want - lo : 0;
+      if (!r) {
+        pull = band(V.follow * (d.fx - d.fx0) + V.edge * ex, V.maxs);
+        lift = band(V.vfol * Math.max(0, d.fy0 - d.fy), V.vmax);
+      }
+      if (r) b.X.jump(clampX(b, want));
+      else b.X.to(clampX(b, want), springFor(b, 'follow'));
+    }
+    b.BX.to(pull, barSp);
+    b.BY.to(lift, barSp);
+    b.SX.to(r ? 0 : (V.stretch * Math.abs(pull)) / 100, barSp);
+    // the anchor: following the finger (mirrored across the bar), fixed, where it landed, or the far end
+    const ay = L.bh * V.ay, mode = b.modes.anchor, lag = stiff(V.alag, 1);
+    if (r) {
+      b.ANC = { x: L.bw * V.ax, y: ay };
+    } else if (mode === 'follow') {
+      if (d) {
+        b.AX.to(fxA(b, d.fx - b.BX.v), lag);
+        let fyb = Math.max(0, Math.min(L.bh, d.fy));
+        if (b.modes.invert) fyb = L.bh - fyb;
+        b.AY.to(ay + (fyb - ay) * V.afy, lag);
+      } else b.AY.to(ay, lag);
+    } else {
+      const ax = mode === 'touch' ? Math.max(0, Math.min(L.bw, d ? d.touch : b.ANC.x)) : mode === 'end' ? (b.BX.v > 0.05 ? 0 : b.BX.v < -0.05 ? L.bw : b.ANC.x) : L.bw * V.ax;
+      b.AX.jump(ax);
+      b.AY.jump(ay);
+    }
+    [b.X, b.LIFT, b.SWELL, b.PUFF, b.BX, b.BY, b.SX, b.AX, b.AY].forEach((s) => s.step(dt, instant));
+    if (!r && mode === 'follow') b.ANC = { x: b.AX.v, y: b.AY.v };
+    // a release drops the bubble once it has reached its tab
+    if (b.drop && now >= b.drop.after && Math.abs(b.X.v - slot(b, b.drop.i)) < 1.5 && Math.abs(b.X.vel) < 80) {
+      b.drop = null;
+      if (!b.held) {
+        r ? b.LIFT.tween(0, dur('--dur-reduced', b.bar)) : b.LIFT.to(0, springFor(b, 'liftOut'));
+        if (!r) b.SWELL.to(0, springFor(b, 'swellOut'));
+        if (instant) b.LIFT.jump(0), b.SWELL.jump(0);
+      }
+    }
+    const g = bubbleGeometry(b, now);
+    b.g = g;
+    // the bar's own glass swells and stretches (its tabs are hidden meanwhile and drawn by the lens)
+    const bs = b.bar.style, tx = b.BX.v;
+    const same = Math.abs(g.rect[0]) < 0.01 && Math.abs(g.rect[1]) < 0.01 && Math.abs(g.rect[2] - 1) < 1e-4 && Math.abs(g.rect[3] - 1) < 1e-4 && Math.abs(tx) < 0.01;
+    if (same) bs.removeProperty('transform');
+    else {
+      bs.transformOrigin = '0 0';
+      bs.transform = 'translate(' + (g.rect[0] + tx).toFixed(2) + 'px,' + g.rect[1].toFixed(2) + 'px) scale(' + g.rect[2].toFixed(4) + ',' + g.rect[3].toFixed(4) + ')';
+    }
+    if (b.gl) {
+      lens.canvas.style.transform = Math.abs(tx) > 0.01 ? 'translateX(' + tx.toFixed(2) + 'px)' : '';
+      drawBubble(b, g);
+      lens.show(true);
+    } else drawBubbleCSS(b, g, tx);
+    if (!b.bar.classList.contains('pk-bubbling')) {
+      b.bar.classList.add('pk-bubbling');
+      emit(b.bar, 'bubble', { up: true });
+    }
+    if (!b.held && !d && !b.drop && b.LIFT.t === 0 && b.LIFT.still() && b.SWELL.still() && b.BX.still() && b.BY.still() && b.SX.still()) bubbleEnd(b);
+  }
+  function bubbleGeometry(b, now) {
+    const V = b.V, L = b.L, r = b.reduced, A = b.ANC;
+    const sw = r ? 0 : Math.max(0, b.SWELL.v), lf = Math.max(0, b.LIFT.v), up = r ? 0 : Math.max(0, b.BY.v), sxv = r ? 0 : Math.max(0, b.SX.v);
+    // the press swell and the sideways stretch, scaled round the anchor (bar points)
+    const sx = (1 + (V.swW / L.bw) * sw) * (1 + sxv), sy = (1 + (V.swH / L.bh) * sw) * (1 - V.squash * sxv);
+    let l = A.x * (1 - sx), rr = A.x + (L.bw - A.x) * sx, t = A.y * (1 - sy), bt = A.y + (L.bh - A.y) * sy;
+    // dragging up: the top rises, the bottom follows a little, the sides spread from the anchor
+    const fa = Math.max(0, Math.min(1, A.x / L.bw)), spread = up * V.uside;
+    t -= up;
+    bt -= up * V.ubot;
+    l -= spread * 2 * fa;
+    rr += spread * 2 * (1 - fa);
+    const bhw = (rr - l) / 2, bhh = (bt - t) / 2, bcx = PAD + (l + rr) / 2, bcy = PAD + (t + bt) / 2;
+    // the jiggle: compacting follows the drag speed with no bounce; after the delay it springs back and overshoots
+    let dH = 0, dW = 0, spd = 0;
+    if (!r) {
+      spd = Math.min(1, Math.abs(b.X.vel) / Math.max(1, V.jfast));
+      const tg = 1 - spd, JG = b.JG;
+      if (tg <= JG.t) {
+        JG.t = tg;
+        JG.at = now;
+        b.PUFF.to(JG.t, stiff(V.jsq, 1));
+      } else if (now - JG.at >= V.jdel) {
+        JG.t = tg;
+        b.PUFF.to(JG.t, stiff(V.jresp, V.jdamp));
+      }
+      const j = b.PUFF.v - 1, z = Math.min(0.99, V.jdamp), pk = Math.max(0.02, Math.exp((-z * Math.PI) / Math.sqrt(1 - z * z)));
+      const jn = Math.min(1, Math.max(0, -j)), jp = Math.min(1, Math.max(0, j) / pk);
+      dH = -jn * V.jhmin + jp * V.jhmax;
+      dW = b.modes.mirror ? -dH : jn * V.jwmax - jp * V.jwmin;
+    }
+    const hw = Math.max(8, L.tw / 2 + (V.bubw / 2 + dW / 2) * lf), hh = Math.max(8, L.th / 2 + (bhh + V.bubh + dH / 2 - L.th / 2) * lf);
+    const by = bcy - V.blift * up * lf;
+    // the icons: stretched only by dragging up, from the icon stretch point; they ride the bar's press swell
+    const dy = up * V.ubot, isy = 1 + (V.ish * up * (1 - V.ubot)) / L.bh, isx = 1 + (V.isw * spread * 2) / L.bw;
+    const ipy = V.iay * L.bh - dy, ipx = b.modes.icons === 'row' ? A.x : slot(b, nearSlot(b, b.X.v));
+    return {
+      bar: [bcx, bcy, bhw, bhh], bub: [PAD + b.X.v, by, hw, hh], lf, spd, dH: dH * lf, dW: dW * lf,
+      rect: [l, t, (rr - l) / L.bw, (bt - t) / L.bh], iw: [PAD + A.x, PAD + ipy, isx, isy], idy: dy, ip: [ipx, ipy],
+      ipr: [PAD + A.x, PAD + A.y, 1 + (V.ride * V.swW * sw) / L.bw, 1 + (V.ride * V.swH * sw) / L.bh], ik: [1 + (V.ipsw / 100) * sw, PAD + V.ipy * L.bh],
+    };
+  }
+  function drawBubble(b, g) {
+    const L = b.L, V = b.V, c = b.colors, pm = (a) => [(a[0] / 255) * a[3], (a[1] / 255) * a[3], (a[2] / 255) * a[3], a[3]];
+    const rest = pm(c.rest);
+    lens.draw('bubble', (gl, u) => {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, b.tex);
+      gl.uniform1i(u.uA, 0);
+      gl.uniform2f(u.uRes, Math.round(L.cw * b.px), Math.round(L.ch * b.px));
+      gl.uniform2f(u.uSize, L.cw, L.ch);
+      gl.uniform1f(u.uDpr, b.px);
+      gl.uniform1f(u.uAH, 2 * L.ch + 4);
+      gl.uniform1f(u.uN, b.L.slots.length || 1);
+      gl.uniform4f(u.uBar, g.bar[0], g.bar[1], g.bar[2], g.bar[3]);
+      gl.uniform4f(u.uBub, g.bub[0], g.bub[1], g.bub[2], g.bub[3]);
+      gl.uniform4f(u.uRest, rest[0], rest[1], rest[2], rest[3]);
+      gl.uniform3f(u.uTint, c.tint[0] / 255, c.tint[1] / 255, c.tint[2] / 255);
+      gl.uniform3f(u.uOverC, c.over[0] / 255, c.over[1] / 255, c.over[2] / 255);
+      gl.uniform1f(u.uLift, g.lf);
+      gl.uniform4f(u.uIW, g.iw[0], g.iw[1], g.iw[2], g.iw[3]);
+      gl.uniform2f(u.uITab, PAD + L.t0, L.tw);
+      gl.uniform4f(u.uIP, g.ipr[0], g.ipr[1], g.ipr[2], g.ipr[3]);
+      gl.uniform2f(u.uIK, g.ik[0], g.ik[1]);
+      gl.uniform1f(u.uIDy, g.idy);
+      gl.uniform1f(u.uIMode, b.modes.icons === 'row' ? 1 : 0);
+      BV.forEach((dd) => dd.u && gl.uniform1f(u[dd.u], V[dd.k]));
+    });
+  }
+  // the CSS bubble: the same shape on top, no bending; the accent copy of the tabs is cut to it
+  function drawBubbleCSS(b, g, tx) {
+    const [bub, rowN, rowA] = b.css, L = b.L, lf = Math.min(1, Math.max(0, g.lf));
+    const w = g.bub[2] * 2, h = g.bub[3] * 2, left = g.bub[0] - PAD - g.bub[2], top = g.bub[1] - PAD - g.bub[3];
+    bub.style.width = w.toFixed(2) + 'px';
+    bub.style.height = h.toFixed(2) + 'px';
+    bub.style.transform = 'translate(' + (L.bx + left + tx).toFixed(2) + 'px,' + (L.by + top).toFixed(2) + 'px)';
+    const [a, z] = b.cssFill, mix = (i) => Math.round(a[i] + (z[i] - a[i]) * lf);
+    bub.style.background = 'rgba(' + mix(0) + ',' + mix(1) + ',' + mix(2) + ',' + (a[3] + (z[3] - a[3]) * lf).toFixed(3) + ')';
+    bub.style.boxShadow = lf > 0.02 ? 'inset 0 1px 1px rgba(255,255,255,' + (0.7 * lf).toFixed(2) + '),inset 0 0 0 .5px rgba(0,0,0,' + (0.12 * lf).toFixed(2) + '),0 3px 8px rgba(0,0,0,' + (0.09 * lf).toFixed(2) + ')' : 'none';
+    // the tab copies ride the bar exactly; the cut is the bubble in the copies' own (untransformed) points
+    const [l0, t0, sx, sy] = g.rect, tf = 'translate(' + (L.bx + l0 + tx).toFixed(2) + 'px,' + (L.by + t0).toFixed(2) + 'px) scale(' + sx.toFixed(4) + ',' + sy.toFixed(4) + ')';
+    [rowN, rowA].forEach((r) => {
+      r.style.transformOrigin = '0 0';
+      r.style.transform = tf;
+    });
+    const cl = (left - l0) / sx, ct = (top - t0) / sy, cw = w / sx, ch = h / sy, rad = Math.min(cw, ch) / 2;
+    const clip = 'inset(' + ct.toFixed(1) + 'px ' + (L.bw - cl - cw).toFixed(1) + 'px ' + (L.bh - ct - ch).toFixed(1) + 'px ' + cl.toFixed(1) + 'px round ' + rad.toFixed(1) + 'px)';
+    rowA.style.clipPath = clip;
+    rowA.style.webkitClipPath = clip;
+  }
+  // the bubble's own calls (Parts.bubble): for a gallery's Tune panel and an app's checks
+  const bubbleAPI = {
+    // keep the bubble up on a bar (as if a finger were resting on its picked tab), or let it go
+    hold(bar, on) {
+      if (!bar || !bubbleWanted(bar)) return false;
+      const b = bubbleOf(bar);
+      if (on) {
+        if (!b.live) {
+          const r = bar.getBoundingClientRect(), i = itemsOf(bar).findIndex((t) => t.classList.contains('on'));
+          const t = itemsOf(bar)[Math.max(0, i)], tr = t.getBoundingClientRect();
+          bubbleDown(bar, { clientX: tr.left + tr.width / 2, clientY: r.top + r.height / 2, pointerId: -1 });
+          b.drag = null;
+          b.drop = null;
+        }
+        b.held = true;
+      } else if (b.held) {
+        b.held = false;
+        if (b.live && !b.drag) b.drop = { i: selIndex(b), after: 0 };
+      }
+      return true;
+    },
+    // where everything is now, in the bar's points: whether it's up, how it's drawn, the bubble, the anchor and the jiggle
+    state(bar) {
+      const b = bar && bubbles.get(bar);
+      if (!b || !b.L) return { up: false };
+      const g = b.g || {};
+      return {
+        up: b.live, mode: b.gl ? 'webgl' : 'css', solid: !!b.solid, reduced: !!b.reduced, held: b.held,
+        x: b.X.v, lift: b.LIFT.v, swell: b.SWELL.v,
+        bubble: g.bub ? { x: g.bub[0] - PAD, y: g.bub[1] - PAD, w: g.bub[2] * 2, h: g.bub[3] * 2 } : null,
+        bar: g.rect ? { x: g.rect[0], y: g.rect[1], sx: g.rect[2], sy: g.rect[3] } : null,
+        anchor: { x: b.ANC.x, y: b.ANC.y }, icons: g.ip ? { x: g.ip[0], y: g.ip[1] } : null,
+        range: [b.L.bw * Math.min(b.V.amin, b.V.amax), b.L.bw * Math.max(b.V.amin, b.V.amax)],
+        jiggle: { height: g.dH || 0, width: g.dW || 0, speed: g.spd || 0 },
+        slots: b.L.slots.slice(), size: { w: b.L.bw, h: b.L.bh },
+      };
+    },
+    values: () => BV.map((d) => ({ name: d.name, kit: d.v, kind: d.kind })),
+    springs: () => Object.keys(BUBBLE_SPRINGS).map((k) => BUBBLE_SPRINGS[k]),
+    // what the lens drew in a box, in the bar's own points: rows of [r, g, b, a] (0–255), or null with the CSS bubble
+    pixels(bar, x, y, w, h) {
+      const b = bar && bubbles.get(bar);
+      if (!b || !b.live || !b.gl) return null;
+      return lens.read(x + PAD, y + PAD, w, h);
+    },
+  };
 
   /* (5, 6) the dock: the folded pill opens the bar; the search circle opens the search field; ✕ closes it */
   doc.addEventListener('click', (ev) => {
@@ -2213,6 +3152,8 @@
     setSlider: (sl, v) => setSlider(sl, v, false),
     setStepper: (st, v) => setStepper(st, v, true),
     select: (barEl, i) => selectBar(barEl, i, true),
+    lens,
+    bubble: bubbleAPI,
     push,
     pop,
     bar,

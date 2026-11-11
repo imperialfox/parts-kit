@@ -1,8 +1,8 @@
 # Parts kit
 
-![version](https://img.shields.io/badge/version-1.3.0-007aff)
+![version](https://img.shields.io/badge/version-1.4.0-007aff)
 
-**Current version:** 1.3.0 · 9 Nov 2026 · [changelog](CHANGELOG.md)
+**Current version:** 1.4.0 · 11 Nov 2026 · [changelog](CHANGELOG.md)
 
 One set of Liquid Glass parts (sheets, menus, alerts, switches, the tab bar and the rest), built once, that any web app or prototype loads with a small settings file of its own. The parts look and move like iOS 26/27, using numbers measured against real iPhones where they exist. It belongs to no app, so any app can use it.
 
@@ -52,6 +52,11 @@ Numbers come from [sdegenaar/liquid_glass_widgets](https://github.com/sdegenaar/
 | `root` | `null` (the page), a selector or element | Where overlays go. Set it when the app lives inside one element. |
 | `tabBar.fold` | `false`, `true` | The tab bar folds into a pill after 20 pt of scrolling down and opens after 12 pt up. |
 | `tabBar.searchGap` | `8` | Points between the tab bar and its search circle. |
+| `tabBar.bubble.on` | `true`, `false` | The Liquid Glass bubble on the tab bar (see [Liquid Glass bubble](#liquid-glass-bubble)). `false` gives back 1.3's highlight exactly. `tabBar: { bubble: false }` is short for `{ on: false }`. |
+| `tabBar.bubble.anchor` | `'follow'`, `'fixed'`, `'touch'`, `'end'` | Where the bar stretches from: following the finger, a fixed point (`--pk-bubble-anchor-x`), where the finger landed, or the end away from the drag. |
+| `tabBar.bubble.invert` | `true`, `false` | The following anchor sits across the bar from the finger and moves the other way. |
+| `tabBar.bubble.icons` | `'row'`, `'each'` | Dragging up stretches the whole row of icons from the anchor, or each icon from its own centre. |
+| `tabBar.bubble.mirror` | `true`, `false` | The bubble's width changes by the same amount as its height, the other way (`false` uses `--pk-bubble-width-max` and `-min`). |
 | `segmented.style` | `'gallery'`, `'squish'` | Gallery: the knob slides on a 350 ms spring, swells to glass and can be dragged. Squish: slides on a curve and squishes; no drag. |
 | `row.press` | `'highlight'`, `'shrink'` | A pressed row highlights (iOS) or shrinks to `--press-row`. |
 | `choices` | `'actionSheet'`, `'sheet'` | How `Parts.choices()` shows. |
@@ -97,13 +102,14 @@ Every value the parts use is named in the defaults block at the top of `parts-ki
 - **Easings:** `--ease-pop`, `--ease-knob`, `--ease-out`, `--ease-in-out`, `--ease-decel`, `--ease-accel`, `--ease-back`, `--ease-lift`, `--ease-linear`, `--ease-steps`.
 - **Durations:** `--dur-quick` 120, `--dur-fade` 200, `--dur-lift-in` 150, `--dur-lift-out` 60, `--dur-switch` 380, `--dur-knob` 150, `--dur-squish` 450, `--dur-appear` 250, `--dur-leave` 350, `--dur-rise` 350, `--dur-cover` 500, `--dur-toast-in` 500, `--dur-toast-out` 350, `--dur-close` 170, `--dur-ramp` 260, `--dur-lift-row` 360, `--dur-recede` 320, `--dur-morph` 420, `--dur-reduced` 100, `--dur-glint` 500, `--dur-progress` 600, `--dur-spin` 1 s.
 - **Kit-only looks** start `--pk-` (menu material `--pk-menu`, dims `--pk-dim` 54% and `--pk-dim-light` 20% / 25%, the grabber, switch and knob colours, and so on).
+- **The tab bar's bubble** (1.4, tuned by eye against iOS 27): every number of the bubble is a `--pk-bubble-…` value; the full list, with what each does, is in the defaults block of `parts-kit.css`. Its colours: `--pk-bubble-tint` (the frost), `--pk-bubble-over-tint` (where it hangs past the bar), `--pk-bubble-css` (without WebGL) and `--pk-bubble-solid` (with Reduce transparency), each with a dark value.
 - **Layout:** `--dockb`, `--dockl`, `--dockr` (where the tab bar sits; 21 pt on an upright iPhone), `--pk-bar-top` (where top bar buttons sit), `--pk-search-gap`, `--pk-kb-gap` (8 pt: how far an open search field sits above the iPhone keyboard; see [Keyboard](#keyboard)).
 
 The rule: nothing below the defaults block writes its own corner, press, curve or duration. `tools/values.py` checks it, the same way an app's value test does.
 
 ## Motion
 
-- **Springs** are a damping ratio ζ and a frequency in Hz, sampled into CSS `linear()` and published on `<html>` as `--ease-<name>` and `--dur-<name>`: `gentle`, `nav`, `ripple`, `press`, `release` (the measured glass press), `snap` (highlights settling, 350 ms), `bloom`, `settle`, `pill`, `sheet`, `menu-open`, `menu-close`.
+- **Springs** are a damping ratio ζ and a frequency in Hz, sampled into CSS `linear()` and published on `<html>` as `--ease-<name>` and `--dur-<name>`: `gentle`, `nav`, `ripple`, `press`, `release` (the measured glass press), `snap` (highlights settling, 350 ms), `bloom`, `settle`, `pill`, `sheet`, `menu-open`, `menu-close`, and the tab bar's bubble (1.4): `bubble-in`, `bubble-out`, `bubble-swell`, `bubble-unswell`, `bubble-follow`, `bubble-travel`, `bubble-snap`.
 - **Speed:** `Parts.motion.setSpeed(n)`: 1 normal, 4 slow (for tuning), 0 off (for tests). Fixed durations are multiplied by `--pk-speed`.
 - **Reduce Motion:** follows the device, or `Parts.motion.setReduced(true | false | null)`. `<html>` gets `.motion-reduced`: no movement or growth, short fades (`--dur-reduced`). Motion off adds `.motion-off`.
 - **An app's own springs:** `springs: {…}` in the settings changes a named spring for the whole app (see [Differences from the kit](#differences-from-the-kit)). `Parts.motion.springs()` gives the springs in use; `Parts.motion.SPRINGS` stays the kit's own.
@@ -156,6 +162,27 @@ New in 1.2. When the tab bar's search field (part 6) is open on an iPhone, the d
 - `pk:keyboard { lift }` fires on the dock each time the lift changes. `Parts.keyboard()` reads the visible area again now and returns the lift (for tests).
 - Pinch zoom isn't a keyboard and lifts nothing. On Android the same reading works where the browser reports the visible area this way; where it resizes the page instead, nothing needs lifting.
 
+## Liquid Glass bubble
+
+New in 1.4, and on by default. While a finger is on the tab bar (part 4), a separate glass bubble rides on top of it and follows the finger, as on iOS 27:
+
+- **It rises out of the picked tab,** one tab's width plus 27 pt, hanging 3.5 pt past the bar, and sinks back into the tab it lands on. A tap travels there; a drag lands on the nearest tab. The pick (`.on`, `aria-selected`, `pk:change`) changes as the finger lifts.
+- **Icons under it turn the accent colour where it covers them,** so half an icon under it is half accent. They never bend or grow: only a 13 pt band at the bubble's rim bends what's under it (Fresnel rings, a mirrored slice at the rim, a little magnifying), with a rim light from the left and a frosted body.
+- **The bar swells** 18.6 × 1.2 pt while touched and **stretches from an anchor** that sits across the bar from the finger, moving the other way a moment behind it (within 0.42 to 0.61 of the bar). **Dragging up** raises its top edge (3 pt at most) while the bottom barely moves, and the icons stretch half as much.
+- **A fast drag squashes the bubble** flat and wide (fully at 130 pt/s); when it slows, it bounces back taller and narrower. The width mirrors the height.
+- **How it's drawn:** one small WebGL canvas over the bar and 36 pt around it, shown only while the bubble is up. The tabs' icons, labels and badges are drawn once into a picture (normal and accent copies), made again only when a badge, the look, the size, the text size, the font or the pick changes, and never while the bubble is up. Each frame is one draw; nothing that moves uses `backdrop-filter`. The bar itself stays the kit's CSS glass.
+- **Reduce Motion:** no jiggle, swell, stretch, rise or moving anchor. The bubble appears and travels between tabs on the short fade (`--dur-reduced`).
+- **Reduce transparency** (`.glass-solid`) **or no WebGL:** the CSS bubble: the same shape on top, a copy of the tabs and an accent copy cut to the bubble, no bending; solid with Reduce transparency (`--pk-bubble-solid`). Whether WebGL works is decided once, when the page first shows a tab bar, never mid-drag.
+- **Folded (part 5) or searching (part 6):** no bubble.
+- **2 to 6 tabs.** Badges (part 19) are drawn into the picture in their own colours.
+- **Off:** `tabBar: { bubble: false }` gives back 1.3's highlight exactly (clear glass, 12 × 8 pt swell, the icon at ×1.15), with no WebGL.
+
+**Changing it.** Every number is a named value (`--pk-bubble-width: 30px;` in the app's stylesheet, or in one tab bar's `style`), the springs are the kit's named `bubble-…` springs (`springs: { 'bubble-travel': { z: 0.8, f: 3.2 } }`), and the switches are `tabBar.bubble` settings. `Parts.differences()` lists each one (`value --pk-bubble-width`, `element Tab bar › --pk-bubble-frost`, `setting tabBar.bubble.mirror`). The Parts gallery's part 4 has a **Tune** switch with a slider for every value, Hold bubble up, the anchor markers, a frame meter and Copy values (the changed lines, ready to paste).
+
+**Calls.** `Parts.bubble.hold(bar, true | false)` keeps the bubble up (for tuning). `Parts.bubble.state(bar)` gives where everything is in the bar's points: `up`, `mode` (`'webgl'` or `'css'`), the bubble, the bar's swell, the anchor, the jiggle. `Parts.bubble.pixels(bar, x, y, w, h)` reads what the lens drew (for tests). `pk:bubble { up }` fires on the bar as the bubble rises and settles.
+
+**The lens.** `Parts.lens` is one WebGL context for the whole page, shared by every part that bends light (the segmented control and switches can use it later without a second context): `ok`, `program(name, fragmentShader, uniforms)`, `texture(canvas)`, `attach(host, x, y, w, h, pixelsPerPoint)`, `draw(name, setUniforms)`, `read(x, y, w, h)`, `stats()`.
+
 ## Alerts with more than one action
 
 New in 1.3. Pass `actions` and the alert shows each one, with Cancel last:
@@ -193,7 +220,7 @@ Numbers are the Parts gallery's. Every part sends `pk:` events that bubble (`pk:
 | 1 | Glass material | `.pk-glass`, `.pk-strong`, `.pk-clear`, `.pk-tinted` | Measured. Glass on the control layer only; `.pk-clear` is glass inside glass (no second blur). |
 | 2, 51 | Top bar and soft edge | `.pk-topbar` (with `.pk-edge`, `.pk-topbar-title`, `.pk-bar-slot.pk-left` / `.pk-right`) beside a `.pk-scroll` | Soft edge and small title after 36 pt. `.pk-edge-blur` (three blurs), `.pk-edge-bottom` (60 pt). |
 | 3 | Large title | `.pk-large-title`, `.pk-date-line` | 34 pt bold. |
-| 4–6 | Tab bar, folding, search | `.pk-dock` > `.pk-tabbar.pk-glass` (`.pk-tab-ind` + `.pk-tab`s), `.pk-tab-pill`, `.pk-search-circle`, `.pk-search-field`, `.pk-search-close` | Tap or drag; `pk:change { index }`, `pk:search { open }`. Folding with `tabBar.fold`. An open search field rides `--pk-kb-gap` (8 pt) above the iPhone keyboard; the lift is `--pk-kb` (see [Keyboard](#keyboard)). |
+| 4–6 | Tab bar, folding, search | `.pk-dock` > `.pk-tabbar.pk-glass` (`.pk-tab-ind` + `.pk-tab`s), `.pk-tab-pill`, `.pk-search-circle`, `.pk-search-field`, `.pk-search-close` | Tap or drag; `pk:change { index }`, `pk:search { open }`. Touched, the Liquid Glass bubble rides on top (1.4, `tabBar.bubble`; see [Liquid Glass bubble](#liquid-glass-bubble)). Folding with `tabBar.fold`. An open search field rides `--pk-kb-gap` (8 pt) above the iPhone keyboard; the lift is `--pk-kb` (see [Keyboard](#keyboard)). |
 | 10 | Pushed page | `.pk-push`; `Parts.push(page, { under })`, `Parts.pop(page)` | Swipe right from anywhere on it. `pk:push`, `pk:pop`. |
 | 11 | Top bar buttons changing | `Parts.bar.swap(button, iconHTML)`, `Parts.bar.appear(slot, html)`, `Parts.bar.leave(slot)` | Measured: blur σ 6 out / 3.5 in, swell 22%; 250 ms in, 350 ms out. |
 | 12 | Glass button | `.pk-btn.pk-glass.pk-press` + `.pk-circle` / `.pk-pill` / `.pk-cta` | Measured: grows 17 pt on its longest side (44 pt circle ×1.39), lights up. |
@@ -257,13 +284,13 @@ Menu items are `{ label, icon, red, disabled, value, sub }` or `'-'` for a gap. 
 
 ## Other calls
 
-`Parts.version`, `Parts.current` (the settings in force), `Parts.differences()` (above), `Parts.keyboard()` (see [Keyboard](#keyboard)), `Parts.problems`, `Parts.check()`, `Parts.allowed(group, key)`, `Parts.own()`, `Parts.refresh()` (place bar highlights now; the kit also does it when the page changes), `Parts.layer()`, `Parts.rel(el)`, `Parts.open` (how many overlays are open), `Parts.N` (gesture numbers), `Parts.SCHEMA`, `Parts.DEFAULTS`.
+`Parts.version`, `Parts.current` (the settings in force), `Parts.differences()` (above), `Parts.keyboard()` (see [Keyboard](#keyboard)), `Parts.bubble` and `Parts.lens` (see [Liquid Glass bubble](#liquid-glass-bubble)), `Parts.problems`, `Parts.check()`, `Parts.allowed(group, key)`, `Parts.own()`, `Parts.refresh()` (place bar highlights now; the kit also does it when the page changes), `Parts.layer()`, `Parts.rel(el)`, `Parts.open` (how many overlays are open), `Parts.N` (gesture numbers), `Parts.SCHEMA`, `Parts.DEFAULTS`.
 
 ## The demo and the checks
 
 - `demo/index.html` is the Parts gallery: every part with its number, built on the kit's own parts and shown in the pinned prototype kit's frame (`demo/vendor/prototype-kit/`, used only by the demo). The controls panel switches every setting both ways.
 - `python tools/bundle.py` makes `dist/parts-gallery.html`, one file for the Claude artifact viewer.
-- `python tools/check.py [shots]` (needs Playwright) runs everything: the value rule, the two dark blocks identical, no personal data or app names in the kit, the pinned copies and checksums; settings refused and accepted, the sample settings, an app's MOTION followed; spring overrides, one-element timings and springs, `Parts.differences()`, overrides under Reduce Motion and speed 0; the search field riding above a faked keyboard and dropping back; the gallery at 402 × 874 and 820 × 1180 in light, dark, Reduce transparency, Reduce Motion and motion off (screenshots, no errors, no sideways scroll, no "NaN", "undefined" or "null"); and every behaviour and setting both ways.
+- `python tools/check.py [shots]` (needs Playwright) runs everything: the value rule, the two dark blocks identical, no personal data or app names in the kit, the pinned copies and checksums; settings refused and accepted, the sample settings, an app's MOTION followed; spring overrides, one-element timings and springs, `Parts.differences()`, overrides under Reduce Motion and speed 0; the search field riding above a faked keyboard and dropping back; the tab bar's bubble (up only while touched, one draw a frame under 2 ms with a busy page too, half an icon half accent, landing and tap travel, the jiggle, and folded, searching, Reduce Motion, Reduce transparency, no WebGL and `tabBar.bubble` off), in light and dark at both sizes; the gallery at 402 × 874 and 820 × 1180 in light, dark, Reduce transparency, Reduce Motion and motion off (screenshots, no errors, no sideways scroll, no "NaN", "undefined" or "null"); and every behaviour and setting both ways.
 - `tools/plain.html` is a plain page with no app, for checking the kit stands on its own.
 
 ## Files
